@@ -1,0 +1,884 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>JSON to ImmutableBase Object Converter</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Courgette&family=Kosugi+Maru&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
+  <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    @keyframes highlight-glow {
+
+      0%,
+      100% {
+        box-shadow: 0 1px 3px 0 rgb(0 0 0/0.1), 0 1px 2px -1px rgb(0 0 0/0.1);
+      }
+
+      25%,
+      75% {
+        box-shadow: 0 0 20px 5px rgba(59, 130, 246, 0.6),
+          0 0 40px 10px rgba(59, 130, 246, 0.4),
+          0 0 60px 15px rgba(59, 130, 246, 0.2);
+      }
+
+      50% {
+        box-shadow: 0 0 30px 8px rgba(59, 130, 246, 0.8),
+          0 0 60px 15px rgba(59, 130, 246, 0.5),
+          0 0 90px 20px rgba(59, 130, 246, 0.3);
+      }
+    }
+
+    @keyframes float-up-fade {
+      0% {
+        opacity: 1;
+        transform: translateY(0);
+      }
+
+      100% {
+        opacity: 0;
+        transform: translateY(-60px);
+      }
+    }
+
+    .highlight-block {
+      animation: highlight-glow 1.5s ease-in-out;
+    }
+
+    .type-link {
+      cursor: pointer;
+      text-decoration: underline;
+      text-decoration-style: dotted;
+    }
+
+    .type-link:hover {
+      text-decoration-style: solid;
+    }
+
+    .copy-tooltip {
+      position: fixed;
+      background: linear-gradient(135deg, #10b981 0%, #059669 100%);
+      color: white;
+      padding: 6px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      white-space: nowrap;
+      pointer-events: none;
+      animation: float-up-fade 1.5s linear forwards;
+      box-shadow: 0 4px 6px -1px rgb(0 0 0/0.1), 0 2px 4px -2px rgb(0 0 0/0.1);
+      z-index: 99999;
+    }
+
+    #title,
+    #convert,
+    #format {
+      font-family: "Courgette", cursive;
+      letter-spacing: 0.05em;
+    }
+
+    .zh-text,
+    .zh-text#convert,
+    .zh-text#format,
+    #title .zh-text {
+      font-family: "Kosugi Maru", sans-serif !important;
+    }
+
+    .history-item {
+      transition: all 0.2s ease;
+      position: relative;
+      z-index: 1;
+    }
+
+    .history-item:hover {
+      transform: translateX(4px);
+      background-color: rgba(59, 130, 246, 0.05);
+      z-index: 2;
+    }
+
+    .history-content {
+      overflow: visible;
+      transition: max-height 0.25s linear, opacity 0.25s linear,
+        margin-top 0.25s linear;
+    }
+
+    .history-content.collapsed {
+      max-height: 0;
+      opacity: 0;
+      margin-top: 0;
+      overflow: hidden;
+    }
+
+    .history-content.expanded {
+      max-height: 2000px;
+      opacity: 1;
+    }
+
+    .scroll-to-top {
+      position: fixed;
+      bottom: 2rem;
+      right: 2rem;
+      width: 3rem;
+      height: 3rem;
+      background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+      color: white;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
+      transition: all 0.3s ease;
+      z-index: 9999;
+      opacity: 0;
+      visibility: hidden;
+      transform: scale(0.8);
+    }
+
+    .scroll-to-top.visible {
+      opacity: 1;
+      visibility: visible;
+      transform: scale(1);
+    }
+
+    .scroll-to-top:hover {
+      transform: scale(1.1);
+      box-shadow: 0 6px 20px rgba(59, 130, 246, 0.6);
+    }
+
+    .history-preview {
+      position: fixed;
+      max-width: 600px;
+      max-height: 400px;
+      overflow: auto;
+      background: #1e1e1e;
+      color: white;
+      padding: 16px;
+      border-radius: 8px;
+      font-family: "Courier New", monospace;
+      font-size: 12px;
+      box-shadow: 0 10px 25px rgba(0, 0, 0, 0.3);
+      z-index: 99998;
+      pointer-events: none;
+      white-space: pre;
+      line-height: 1.5;
+    }
+  </style>
+</head>
+
+<body class="bg-gray-100 min-h-screen flex items-center justify-center p-6">
+  <div id="app" class="w-full max-w-5xl bg-white shadow-lg rounded-xl p-6">
+    <div class="fixed top-4 right-4 z-50">
+      <button @click="toggleLanguage"
+        class="bg-white hover:bg-gray-100 text-gray-700 px-3 py-2 rounded-lg shadow-md transition text-sm font-semibold border border-gray-200"
+        :class="{'zh-text':currentLang==='zh-TW'}">
+        {{currentLang==='zh-TW'?'中文':'EN'}}
+      </button>
+    </div>
+    <h1 id="title" class="text-2xl font-bold mb-4 text-gray-800 text-center">
+      🧠 JSON to
+      <a href="https://github.com/ReallifeKip/ImmutableBase" target="_blank"
+        class="text-blue-500 hover:text-blue-700">ImmutableBase</a>
+      Object
+      <span :class="{'zh-text':currentLang==='zh-TW'}">{{t('Converter')}}</span>
+    </h1>
+    <textarea v-model="jsonText" rows="10" :placeholder="t('Insert JSON to convert')"
+      class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm"></textarea>
+    <div class="flex justify-between items-center mt-4">
+      <a href="https://github.com/ReallifeKip/ImmutableBase" target="_blank"
+        class="flex items-center gap-2 text-gray-700 hover:text-gray-900 transition group">
+        <div
+          class="w-7 h-7 rounded-full overflow-hidden bg-black flex items-center justify-center hover:opacity-80 transition">
+          <svg class="w-6 h-6 text-white" fill="currentColor" viewBox="0 0 24 24">
+            <path fill-rule="evenodd"
+              d="M12 2C6.477 2 2 6.484 2 12.017c0 4.425 2.865 8.18 6.839 9.504.5.092.682-.217.682-.483 0-.237-.008-.868-.013-1.703-2.782.605-3.369-1.343-3.369-1.343-.454-1.158-1.11-1.466-1.11-1.466-.908-.62.069-.608.069-.608 1.003.07 1.531 1.032 1.531 1.032.892 1.53 2.341 1.088 2.91.832.092-.647.35-1.088.636-1.338-2.22-.253-4.555-1.113-4.555-4.951 0-1.093.39-1.988 1.029-2.688-.103-.253-.446-1.272.098-2.65 0 0 .84-.27 2.75 1.026A9.564 9.564 0 0112 6.844c.85.004 1.705.115 2.504.337 1.909-1.296 2.747-1.027 2.747-1.027.546 1.379.202 2.398.1 2.651.64.7 1.028 1.595 1.028 2.688 0 3.848-2.339 4.695-4.566 4.943.359.309.678.92.678 1.855 0 1.338-.012 2.419-.012 2.747 0 .268.18.58.688.482A10.019 10.019 0 0022 12.017C22 6.484 17.522 2 12 2z"
+              clip-rule="evenodd" />
+          </svg>
+        </div>
+      </a>
+      <div id="format" class="flex items-center gap-3">
+        <button @click="formatJson"
+          class="bg-gray-500 text-white hover:bg-gray-600 rounded-md px-4 py-2 transition font-semibold shadow-sm"
+          :class="{'zh-text':currentLang==='zh-TW'}">
+          {{t('Format JSON')}}
+        </button>
+        <button id="convert" @click="convert"
+          class="bg-blue-600 text-white hover:bg-blue-700 px-6 py-2 rounded-md transition font-semibold shadow-sm"
+          :class="{'zh-text':currentLang==='zh-TW'}">
+          {{t('Convert')}}
+        </button>
+      </div>
+    </div>
+    <div v-if="error" class="mt-4 bg-red-100 text-red-700 px-3 py-2 rounded text-sm font-mono">
+      {{error}}
+    </div>
+    <div v-if="convertHistory.length" id="convert-history" class="mt-6 bg-blue-50 rounded-lg p-4">
+      <div @click="toggleConvertHistory" class="flex items-center justify-between cursor-pointer">
+        <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+          </svg>
+          <span :class="{'zh-text':currentLang==='zh-TW'}">{{t('Convert History')}}</span>
+          ({{convertHistory.length}}/10)
+        </h2>
+        <svg :class="{'rotate-180':convertHistoryExpanded}" class="w-5 h-5 text-gray-600 transition-transform"
+          fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      <div :class="['history-content','space-y-2',convertHistoryExpanded?'expanded mt-3':'collapsed']">
+        <div v-for="(item,idx) in convertHistory" :key="idx" @click="loadFromConvertHistory(item)"
+          class="history-item cursor-pointer bg-white rounded-md p-3 border border-gray-200 hover:border-blue-400">
+          <div class="flex justify-between items-start">
+            <div class="flex-1">
+              <div class="text-sm font-medium text-gray-800">
+                {{item.timestamp}}
+              </div>
+              <div class="text-xs text-gray-500 mt-1 font-mono truncate">
+                {{item.preview}}
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-if="history.length" id="recent-history" class="mt-6 bg-gray-50 rounded-lg p-4">
+      <div @click="toggleRecentHistory" class="flex items-center justify-between cursor-pointer">
+        <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2">
+          <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+              d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+          </svg>
+          <span :class="{'zh-text':currentLang==='zh-TW'}">{{t('Recent History')}}</span>
+          ({{history.length}}/10)
+        </h2>
+        <svg :class="{'rotate-180':historyExpanded}" class="w-5 h-5 text-gray-600 transition-transform" fill="none"
+          stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+        </svg>
+      </div>
+      <div :class="['history-content','space-y-2',historyExpanded?'expanded mt-3':'collapsed']">
+        <div v-for="item in history" :key="item.id" @mouseenter="showPreview($event,item)" @mouseleave="hidePreview"
+          @click="loadFromHistory(item)"
+          class="history-item cursor-pointer bg-white rounded-md p-3 border border-gray-200 hover:border-blue-400">
+          <div class="flex items-center gap-2">
+            <div class="text-sm font-medium text-gray-800">
+              {{item.className}}
+            </div>
+            <span class="text-xs px-2 py-0.5 rounded-full"
+              :class="item.baseType==='ValueObject'?'bg-purple-100 text-purple-700':'bg-blue-100 text-blue-700'">{{item.baseType}}</span>
+          </div>
+          <div class="text-xs text-gray-500 mt-1">
+            {{item.propCount}} properties · {{item.timestamp}}
+          </div>
+        </div>
+      </div>
+    </div>
+    <div v-if="classes.length" class="mt-6 space-y-6">
+      <div v-for="cls in classes" :key="cls.name" :id="`class-${cls.name}`" class="space-y-1">
+        <div class="flex items-center justify-between gap-2">
+          <h2 class="font-bold text-xl">{{cls.name}}</h2>
+          <div class="flex gap-2 items-center">
+            <span class="text-sm font-semibold text-gray-700">Extends</span>
+            <select v-model="cls.baseType" @change="updateHistoryBaseType(cls)"
+              class="text-xs bg-gray-200 border border-gray-400 rounded px-2 py-1">
+              <option value="DataTransferObject">DataTransferObject</option>
+              <option value="ValueObject">ValueObject</option>
+            </select>
+          </div>
+        </div>
+        <div :ref="`block-${cls.name}`"
+          class="relative bg-[#1e1e1e] text-sm p-4 rounded-lg font-mono border border-gray-700 text-white"
+          style="overflow-x: auto; overflow-y: visible">
+          <div class="absolute top-2 right-2" style="z-index: 10">
+            <button @click="copyToClipboard(renderClass(cls),$event)"
+              class="relative text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded transition"
+              :class="{'zh-text':currentLang==='zh-TW'}">
+              {{t('copy')}}
+            </button>
+          </div>
+          <pre v-html="highlightPhp(renderClass(cls),cls.name)" class="whitespace-pre-wrap"></pre>
+        </div>
+      </div>
+    </div>
+  </div>
+  <div id="scrollToTop" class="scroll-to-top">
+    <i class="fas fa-arrow-up"></i>
+  </div>
+  <script lang="ts">
+    const { createApp, ref } = Vue;
+    createApp({
+      setup() {
+        let jsonText = ref(""),
+          classes = ref([]),
+          error = ref(""),
+          history = ref([]),
+          historyExpanded = ref(false),
+          convertHistory = ref([]),
+          convertHistoryExpanded = ref(false),
+          previewElement = ref(null),
+          currentHistoryItemId = ref(null);
+
+        const translations = {
+          "zh-TW": {
+            "Convert History": "轉換歷史",
+            "Recent History": "物件歷史",
+            "Format JSON": "格式化 JSON",
+            Convert: "轉換",
+            Converter: "轉換器",
+            copy: "複製",
+            copied: "已複製",
+            "Insert JSON to convert": "插入 JSON 以進行轉換",
+          },
+          en: {
+            "Convert History": "Convert History",
+            "Recent History": "Object History",
+            "Format JSON": "Format JSON",
+            Convert: "Convert",
+            Converter: "Converter",
+            copy: "Copy",
+            copied: "Copied",
+            "Insert JSON to convert": "Insert JSON to convert",
+          },
+        },
+          detectLanguage = () =>
+            (navigator.language || navigator.userLanguage).startsWith("zh")
+              ? "zh-TW"
+              : "en",
+          currentLang = ref(
+            localStorage.getItem("appLanguage") || detectLanguage()
+          ),
+          t = (key) => translations[currentLang.value]?.[key] || key,
+          toggleLanguage = () => {
+            currentLang.value =
+              currentLang.value === "zh-TW" ? "en" : "zh-TW";
+            localStorage.setItem("appLanguage", currentLang.value);
+          },
+          loadHistoryFromStorage = () => {
+            try {
+              const stored = localStorage.getItem("phpClassHistory");
+              if (stored) history.value = JSON.parse(stored);
+            } catch (e) {
+              console.error("Failed to load history:", e);
+            }
+          },
+          saveHistoryToStorage = () => {
+            try {
+              localStorage.setItem(
+                "phpClassHistory",
+                JSON.stringify(history.value)
+              );
+            } catch (e) {
+              console.error("Failed to save history:", e);
+            }
+          },
+          loadConvertHistoryFromStorage = () => {
+            try {
+              const stored = localStorage.getItem("convertHistory");
+              if (stored) convertHistory.value = JSON.parse(stored);
+            } catch (e) {
+              console.error("Failed to load convert history:", e);
+            }
+          },
+          saveConvertHistoryToStorage = () => {
+            try {
+              localStorage.setItem(
+                "convertHistory",
+                JSON.stringify(convertHistory.value)
+              );
+            } catch (e) {
+              console.error("Failed to save convert history:", e);
+            }
+          };
+
+        loadHistoryFromStorage();
+        loadConvertHistoryFromStorage();
+
+        function walkJson(name, json, bucket, seen, depth = 0, order = 0) {
+          const className = name[0].toUpperCase() + name.slice(1);
+          if (seen.has(className)) return;
+          seen.add(className);
+          let props = [],
+            usesArrayOf = false,
+            childOrder = 0;
+          for (const [key, value] of Object.entries(json)) {
+            let type = "mixed",
+              annotations = "";
+            if (value === null) type = "mixed";
+            else if (Array.isArray(value)) {
+              if (value.length && typeof value[0] === "object") {
+                const subName = key[0].toUpperCase() + key.slice(1);
+                walkJson(
+                  subName,
+                  value[0],
+                  bucket,
+                  seen,
+                  depth + 1,
+                  childOrder++
+                );
+                type = "array";
+                annotations = `/** @var ${subName}[] */\n#[ArrayOf(${subName}::class)]\n`;
+                usesArrayOf = true;
+              } else type = "array";
+            } else if (typeof value === "object") {
+              const subName = key[0].toUpperCase() + key.slice(1);
+              walkJson(subName, value, bucket, seen, depth + 1, childOrder++);
+              type = subName;
+            } else if (typeof value === "number")
+              type = Number.isInteger(value) ? "int" : "float";
+            else if (typeof value === "boolean") type = "bool";
+            else if (typeof value === "string") type = "string";
+            props.push({ key, type, annotations });
+          }
+          bucket.push({
+            name: className,
+            props,
+            usesArrayOf,
+            baseType: "DataTransferObject",
+            depth,
+            order,
+          });
+        }
+
+        const convert = () => {
+          error.value = "";
+          classes.value = [];
+          try {
+            const parsed = JSON.parse(jsonText.value),
+              bucket = [];
+            walkJson("Root", parsed, bucket, new Set());
+            bucket.sort((a, b) =>
+              a.depth !== b.depth ? a.depth - b.depth : a.order - b.order
+            );
+            classes.value = bucket;
+            jsonText.value = JSON.stringify(parsed, null, 2);
+            if (bucket.length > 0) {
+              const historyIds = addToHistory(bucket, jsonText.value);
+              addToConvertHistory(jsonText.value);
+              if (historyIds.length > 0)
+                currentHistoryItemId.value = historyIds[0];
+              setTimeout(() => {
+                const firstClass = bucket[0],
+                  element =
+                    firstClass &&
+                    document.getElementById(`class-${firstClass.name}`);
+                if (element) {
+                  const rect = element.getBoundingClientRect(),
+                    targetScroll = window.scrollY + rect.top - 16;
+                  window.scrollTo({
+                    top: targetScroll,
+                    behavior: "smooth",
+                  });
+                }
+              }, 200);
+            }
+          } catch (e) {
+            error.value = `⚠️ Invalid JSON: ${e.message}`;
+          }
+        },
+          renderClass = (cls) => {
+            const useLines = [];
+            if (cls.usesArrayOf)
+              useLines.push("use ReallifeKip\\ImmutableBase\\ArrayOf;");
+            useLines.push(
+              cls.baseType === "DataTransferObject"
+                ? "use ReallifeKip\\ImmutableBase\\Objects\\DataTransferObject;"
+                : "use ReallifeKip\\ImmutableBase\\Objects\\ValueObject;"
+            );
+            const visibility =
+              cls.baseType === "ValueObject" ? "private" : "public",
+              propsCode = cls.props
+                .map((p) => {
+                  const ind = "    ",
+                    ann = p.annotations
+                      ? p.annotations
+                        .split("\n")
+                        .filter(Boolean)
+                        .map((l) => `${ind}${l}`)
+                        .join("\n") + "\n"
+                      : "";
+                  return `${ann}${ind}${visibility} readonly ${p.type} $${p.key};`;
+                })
+                .join("\n"),
+              useSection = useLines.join("\n").replace(/\\/g, "\\");
+            return `<?php\n\n${useSection}\n\nclass ${cls.name} extends ${cls.baseType} {\n${propsCode}\n}`;
+          },
+          highlightPhp = (code, currentClassName) => {
+            let placeholders = [],
+              i = 0;
+            const classNames = classes.value.map((c) => c.name);
+            let out = code
+              .replace(/&/g, "__AMP__")
+              .replace(/</g, "__LT__")
+              .replace(/>/g, "__GT__")
+              .replace(
+                /__LT__\?php/g,
+                '<span style="color:#569cd6">__LT__?php</span>'
+              )
+              .replace(
+                /(\/\*\*[^*]*\*+(?:[^\/*][^*]*\*+)*\/)/g,
+                '<span style="color:#6a9955">$1</span>'
+              )
+              .replace(/@var/g, '<span style="color:#569cd6">@var</span>')
+              .replace(
+                /ReallifeKip\\ImmutableBase\\ArrayOf/g,
+                "__NS_ARRAYOF__"
+              )
+              .replace(
+                /ReallifeKip\\ImmutableBase\\Objects\\/g,
+                '<span style="color:white">ReallifeKip\\ImmutableBase\\Objects\\</span>'
+              )
+              .replace(
+                /ReallifeKip\\ImmutableBase\\/g,
+                '<span style="color:white">ReallifeKip\\ImmutableBase\\</span>'
+              )
+              .replace(/ArrayOf/g, '<span style="color:white">ArrayOf</span>')
+              .replace(
+                /\bclass\b/g,
+                '<span style="color:#569cd6">class</span>'
+              )
+              .replace(
+                /\bextends\b/g,
+                '<span style="color:#569cd6">extends</span>'
+              )
+              .replace(/\buse\b/g, '<span style="color:#569cd6">use</span>')
+              .replace(
+                /(<span style="color:#569cd6">class<\/span>)\s+(\w+)/g,
+                '$1 <span style="color:#4ec9b0">$2</span>'
+              )
+              .replace(
+                /\b(public|private|readonly|int|float|bool|string|mixed|array)\b/g,
+                '<span style="color:#569cd6">$1</span>'
+              )
+              .replace(
+                /#\[([^\]]+)\]/g,
+                '<span style="color:#da70d6">#[</span>$1<span style="color:#da70d6">]</span>'
+              )
+              .replace(/\$\w+/g, '<span style="color:#9cdcfe">$&</span>')
+              .replace(/{/g, '<span style="color:#ffd700">{</span>')
+              .replace(/}/g, '<span style="color:#ffd700">}</span>')
+              .replace(/;/g, '<span style="color:white">;</span>')
+              .replace(/__AMP__/g, "&amp;")
+              .replace(/__LT__/g, "&lt;")
+              .replace(/__GT__/g, "&gt;");
+            out = out.replace(/<span[^>]*>.*?<\/span>/g, (m) => {
+              const key = `__SPAN_${i++}__`;
+              placeholders.push({ key, value: m });
+              return key;
+            });
+            out = out.replace(
+              /\b(?!ArrayOf)([A-Z][A-Za-z0-9_]*)\b/g,
+              (match) =>
+                classNames.includes(match) && match !== currentClassName
+                  ? `<span style="color:#4ec9b0" class="type-link" onclick="scrollToClass('${match}')">${match}</span>`
+                  : `<span style="color:#4ec9b0">${match}</span>`
+            );
+            for (const { key, value } of placeholders)
+              out = out.replace(new RegExp(key, "g"), value);
+            return out.replace(
+              /__NS_ARRAYOF__/g,
+              'ReallifeKip\\ImmutableBase\\<span style="color:#4ec9b0">ArrayOf</span>'
+            );
+          },
+          copyToClipboard = async (text, event) => {
+            try {
+              await navigator.clipboard.writeText(text);
+              showCopyTooltip(event.target);
+            } catch (err) {
+              console.error("複製失敗:", err);
+              showCopyTooltip(event.target, false);
+            }
+          },
+          showCopyTooltip = (button, success = true) => {
+            const tooltip = document.createElement("div"),
+              rect = button.getBoundingClientRect();
+            tooltip.className = "copy-tooltip";
+            tooltip.textContent = success ? `✓ ${t("copied")}!` : "✗ Failed";
+            tooltip.style.top = `${rect.top - 40}px`;
+            tooltip.style.left = `${rect.left}px`;
+            document.body.appendChild(tooltip);
+            setTimeout(() => tooltip.remove(), 1500);
+          },
+          addToHistory = (bucket, originalJson) => {
+            const timestamp = new Date().toLocaleString("zh-TW", {
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+            }),
+              ids = [];
+            for (let i = bucket.length - 1; i >= 0; i--) {
+              const cls = bucket[i],
+                id = `${Date.now()}_${Math.random()
+                  .toString(36)
+                  .substr(2, 9)}`;
+              history.value.unshift({
+                id,
+                classData: JSON.parse(JSON.stringify(cls)),
+                className: cls.name,
+                baseType: cls.baseType,
+                propCount: cls.props.length,
+                timestamp,
+                code: renderClass(cls),
+              });
+              ids.unshift(id);
+            }
+            if (history.value.length > 10)
+              history.value = history.value.slice(0, 10);
+            saveHistoryToStorage();
+            return ids;
+          },
+          loadFromHistory = (item) => {
+            classes.value = [JSON.parse(JSON.stringify(item.classData))];
+            currentHistoryItemId.value = item.id;
+            setTimeout(() => {
+              const element = document.getElementById(
+                `class-${item.className}`
+              );
+              if (element) {
+                const rect = element.getBoundingClientRect(),
+                  targetScroll = window.scrollY + rect.top - 16;
+                window.scrollTo({ top: targetScroll, behavior: "smooth" });
+              }
+            }, 200);
+          },
+          copyHistoryItem = (item, event) => {
+            navigator.clipboard.writeText(item.code).then(() => {
+              const tooltip = document.createElement("div");
+              tooltip.className = "copy-tooltip";
+              tooltip.textContent = `✓ ${t("copied")}!`;
+              tooltip.style.top = `${event.clientY - 40}px`;
+              tooltip.style.left = `${event.clientX - 30}px`;
+              document.body.appendChild(tooltip);
+              setTimeout(() => tooltip.remove(), 1500);
+            });
+          },
+          loadAndCopyFromHistory = (item, event) => {
+            loadFromHistory(item);
+            copyHistoryItem(item, event);
+            setTimeout(() => {
+              const element = document.getElementById(
+                `class-${item.className}`
+              );
+              if (element) {
+                const rect = element.getBoundingClientRect(),
+                  targetScroll = window.scrollY + rect.top - 16;
+                window.scrollTo({ top: targetScroll, behavior: "smooth" });
+              }
+            }, 200);
+          },
+          showPreview = (event, item) => {
+            hidePreview();
+            const preview = document.createElement("div");
+            preview.className = "history-preview";
+            preview.id = "history-preview";
+            preview.innerHTML = highlightPhp(item.code, item.className);
+            updatePreviewPosition(event);
+            document.body.appendChild(preview);
+            const updatePosition = (e) => updatePreviewPosition(e);
+            event.currentTarget.addEventListener("mousemove", updatePosition);
+            preview._updatePosition = updatePosition;
+            preview._currentTarget = event.currentTarget;
+          },
+          updatePreviewPosition = (event) => {
+            const preview = document.getElementById("history-preview");
+            if (!preview) return;
+            const offset = 20,
+              previewRect = preview.getBoundingClientRect(),
+              previewWidth = previewRect.width || 600,
+              previewHeight = previewRect.height || 400;
+            let left = event.clientX + offset,
+              top = event.clientY + offset;
+            if (left + previewWidth > window.innerWidth)
+              left = event.clientX - previewWidth - offset;
+            if (top + previewHeight > window.innerHeight)
+              top = window.innerHeight - previewHeight - offset;
+            if (top < offset) top = offset;
+            if (left < offset) left = offset;
+            preview.style.left = `${left}px`;
+            preview.style.top = `${top}px`;
+          },
+          hidePreview = () => {
+            const preview = document.getElementById("history-preview");
+            if (preview) {
+              if (preview._updatePosition && preview._currentTarget)
+                preview._currentTarget.removeEventListener(
+                  "mousemove",
+                  preview._updatePosition
+                );
+              preview.remove();
+            }
+          },
+          updateHistoryBaseType = (cls) => {
+            let historyItem;
+            if (currentHistoryItemId.value) {
+              historyItem = history.value.find(
+                (item) =>
+                  item.id === currentHistoryItemId.value &&
+                  item.className === cls.name
+              );
+            }
+            if (!historyItem) {
+              historyItem = history.value.find(
+                (item) => item.className === cls.name
+              );
+            }
+            if (historyItem) {
+              historyItem.baseType = cls.baseType;
+              historyItem.classData.baseType = cls.baseType;
+              historyItem.code = renderClass(cls);
+              saveHistoryToStorage();
+            }
+          },
+          addToConvertHistory = (json) => {
+            const timestamp = new Date().toLocaleString("zh-TW", {
+              year: "numeric",
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+              second: "2-digit",
+            });
+            let formattedJson = json;
+            try {
+              formattedJson = JSON.stringify(JSON.parse(json), null, 2);
+            } catch (e) { }
+            convertHistory.value.unshift({
+              json: formattedJson,
+              timestamp,
+              preview:
+                json.substring(0, 100) + (json.length > 100 ? "..." : ""),
+            });
+            if (convertHistory.value.length > 10)
+              convertHistory.value = convertHistory.value.slice(0, 10);
+            saveConvertHistoryToStorage();
+          },
+          loadFromConvertHistory = (item) => {
+            jsonText.value = item.json;
+            setTimeout(() => {
+              window.scrollTo({ top: 0, behavior: "smooth" });
+              const textarea = document.querySelector("textarea");
+              if (textarea) {
+                const lineCount = (item.json.match(/\n/g) || []).length + 1;
+                textarea.rows = Math.max(10, lineCount);
+              }
+            }, 100);
+          },
+          toggleConvertHistory = () => {
+            convertHistoryExpanded.value = !convertHistoryExpanded.value;
+            const element = document.getElementById("convert-history");
+            if (element) {
+              const scrollToTitle = () => {
+                const rect = element.getBoundingClientRect(),
+                  targetScroll = window.scrollY + rect.top - 16;
+                if (Math.abs(rect.top - 16) > 1)
+                  window.scrollTo({ top: targetScroll, behavior: "smooth" });
+              };
+              scrollToTitle();
+              let attempts = 0;
+              const interval = setInterval(() => {
+                scrollToTitle();
+                if (++attempts >= 6) clearInterval(interval);
+              }, 50);
+            }
+          },
+          toggleRecentHistory = () => {
+            historyExpanded.value = !historyExpanded.value;
+            const element = document.getElementById("recent-history");
+            if (element) {
+              const scrollToTitle = () => {
+                const rect = element.getBoundingClientRect(),
+                  targetScroll = window.scrollY + rect.top - 16;
+                if (Math.abs(rect.top - 16) > 1)
+                  window.scrollTo({ top: targetScroll, behavior: "smooth" });
+              };
+              scrollToTitle();
+              let attempts = 0;
+              const interval = setInterval(() => {
+                scrollToTitle();
+                if (++attempts >= 6) clearInterval(interval);
+              }, 50);
+            }
+          },
+          formatJson = () => {
+            try {
+              if (!jsonText.value.trim()) return;
+              jsonText.value = JSON.stringify(
+                JSON.parse(jsonText.value),
+                null,
+                2
+              );
+              error.value = "";
+            } catch (e) {
+              error.value = `⚠️ Invalid JSON: ${e.message}`;
+            }
+          };
+
+        return {
+          jsonText,
+          classes,
+          error,
+          history,
+          historyExpanded,
+          convertHistory,
+          convertHistoryExpanded,
+          currentLang,
+          convert,
+          highlightPhp,
+          renderClass,
+          copyToClipboard,
+          loadFromHistory,
+          copyHistoryItem,
+          loadAndCopyFromHistory,
+          showPreview,
+          hidePreview,
+          updatePreviewPosition,
+          updateHistoryBaseType,
+          loadFromConvertHistory,
+          toggleConvertHistory,
+          toggleRecentHistory,
+          formatJson,
+          t,
+          toggleLanguage,
+        };
+      },
+    }).mount("#app");
+
+    document
+      .getElementById("scrollToTop")
+      .addEventListener("click", () =>
+        window.scrollTo({ top: 0, behavior: "smooth" })
+      );
+    window.addEventListener("scroll", () => {
+      const scrollTopBtn = document.getElementById("scrollToTop");
+      if (scrollTopBtn)
+        scrollTopBtn.classList[window.scrollY > 400 ? "add" : "remove"](
+          "visible"
+        );
+    });
+
+    function scrollToClass(className) {
+      const element = document.getElementById(`class-${className}`);
+      if (element) {
+        element.scrollIntoView({ behavior: "smooth", block: "center" });
+        const codeBlock = element.querySelector(".bg-\\[\\#1e1e1e\\]");
+        if (codeBlock) {
+          codeBlock.classList.remove("highlight-block");
+          void codeBlock.offsetWidth;
+          codeBlock.classList.add("highlight-block");
+          setTimeout(
+            () => codeBlock.classList.remove("highlight-block"),
+            1500
+          );
+        }
+      }
+    }
+  </script>
+</body>
+
+</html>
