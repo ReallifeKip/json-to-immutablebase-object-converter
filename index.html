@@ -5,7 +5,6 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>JSON to ImmutableBase Object Converter</title>
-  <link rel="icon" type="image/x-icon" href="favicon.ico">
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
   <link href="https://fonts.googleapis.com/css2?family=Courgette&family=Kosugi+Maru&display=swap" rel="stylesheet" />
@@ -233,12 +232,15 @@
         </svg>
       </div>
       <div :class="['history-content','space-y-2',convertHistoryExpanded?'expanded mt-3':'collapsed']">
-        <div v-for="(item,idx) in convertHistory" :key="idx" @click="loadFromConvertHistory(item)"
+        <div v-for="(item,idx) in convertHistory" :key="idx" @click="loadFromConvertHistory(item,idx)"
           class="history-item cursor-pointer bg-white rounded-md p-3 border border-gray-200 hover:border-blue-400">
           <div class="flex justify-between items-start">
             <div class="flex-1">
-              <div class="text-sm font-medium text-gray-800">
-                {{item.timestamp}}
+              <div class="flex items-center gap-2">
+                <div class="text-sm font-medium text-gray-800">
+                  {{item.timestamp}}
+                </div>
+                <span v-if="item.namespace" class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-mono">{{item.namespace}}</span>
               </div>
               <div class="text-xs text-gray-500 mt-1 font-mono truncate">
                 {{item.preview}}
@@ -273,12 +275,25 @@
             </div>
             <span class="text-xs px-2 py-0.5 rounded-full"
               :class="item.baseType==='ValueObject'?'bg-purple-100 text-purple-700':'bg-blue-100 text-blue-700'">{{item.baseType}}</span>
+            <span v-if="item.namespace" class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-mono">{{item.namespace}}</span>
           </div>
           <div class="text-xs text-gray-500 mt-1">
             {{item.propCount}} properties · {{item.timestamp}}
           </div>
         </div>
       </div>
+    </div>
+    <div v-if="classes.length" class="mt-6 rounded-lg">
+      <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2 mb-3">
+        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+            d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+        </svg>
+        <span :class="{'zh-text':currentLang==='zh-TW'}">Namespace</span>
+      </h2>
+      <input v-model="namespaceValue" @input="updateNamespace" type="text"
+        :placeholder="currentLang==='zh-TW'?'輸入 namespace (選填)':'Enter namespace (optional)'"
+        class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm" />
     </div>
     <div v-if="classes.length" class="mt-6 space-y-6">
       <div v-for="cls in classes" :key="cls.name" :id="`class-${cls.name}`" class="space-y-1">
@@ -323,7 +338,11 @@
           convertHistory = ref([]),
           convertHistoryExpanded = ref(false),
           previewElement = ref(null),
-          currentHistoryItemId = ref(null);
+          currentHistoryItemId = ref(null),
+          currentBatchId = ref(null),
+          currentConvertHistoryIndex = ref(null),
+          isFromHistory = ref(false),
+          namespaceValue = ref("");
 
         const translations = {
           "zh-TW": {
@@ -395,10 +414,73 @@
             } catch (e) {
               console.error("Failed to save convert history:", e);
             }
+          },
+          loadNamespaceFromStorage = () => {
+            try {
+              const stored = localStorage.getItem("namespaceValue");
+              if (stored) namespaceValue.value = stored;
+            } catch (e) {
+              console.error("Failed to load namespace:", e);
+            }
+          },
+          saveNamespaceToStorage = () => {
+            try {
+              localStorage.setItem("namespaceValue", namespaceValue.value);
+            } catch (e) {
+              console.error("Failed to save namespace:", e);
+            }
+          },
+          updateNamespace = () => {
+            saveNamespaceToStorage();
+            // 更新當前所有類別的 namespace
+            classes.value.forEach(cls => {
+              cls.namespace = namespaceValue.value;
+            });
+            // 根據來源決定更新策略
+            if (isFromHistory.value) {
+              // 從歷史載入：只更新當前那一個物件
+              if (currentHistoryItemId.value) {
+                const historyItem = history.value.find(
+                  item => item.id === currentHistoryItemId.value
+                );
+                if (historyItem) {
+                  historyItem.namespace = namespaceValue.value;
+                  if (historyItem.classData) {
+                    historyItem.classData.namespace = namespaceValue.value;
+                    historyItem.code = renderClass(historyItem.classData);
+                  }
+                  saveHistoryToStorage();
+                }
+              }
+            } else {
+              // 新 Convert：更新所有同批次的物件
+              if (currentBatchId.value) {
+                const historyItems = history.value.filter(
+                  item => item.batchId === currentBatchId.value
+                );
+                historyItems.forEach(item => {
+                  item.namespace = namespaceValue.value;
+                  if (item.classData) {
+                    item.classData.namespace = namespaceValue.value;
+                    item.code = renderClass(item.classData);
+                  }
+                });
+                saveHistoryToStorage();
+              }
+              // 同時更新轉換歷史
+              if (currentConvertHistoryIndex.value !== null) {
+                const convertHistoryItem = convertHistory.value[currentConvertHistoryIndex.value];
+                if (convertHistoryItem) {
+                  convertHistoryItem.namespace = namespaceValue.value;
+                  saveConvertHistoryToStorage();
+                }
+              }
+            }
           };
 
         loadHistoryFromStorage();
         loadConvertHistoryFromStorage();
+        loadNamespaceFromStorage();
 
         function walkJson(name, json, bucket, seen, depth = 0, order = 0) {
           const className = name[0].toUpperCase() + name.slice(1);
@@ -459,10 +541,14 @@
             classes.value = bucket;
             jsonText.value = JSON.stringify(parsed, null, 2);
             if (bucket.length > 0) {
-              const historyIds = addToHistory(bucket, jsonText.value);
-              addToConvertHistory(jsonText.value);
-              if (historyIds.length > 0)
-                currentHistoryItemId.value = historyIds[0];
+              const { ids, batchId } = addToHistory(bucket, jsonText.value);
+              const convertHistoryIndex = addToConvertHistory(jsonText.value);
+              if (ids.length > 0) {
+                currentHistoryItemId.value = ids[0];
+                currentBatchId.value = batchId;
+                currentConvertHistoryIndex.value = convertHistoryIndex;
+                isFromHistory.value = false;
+              }
               setTimeout(() => {
                 const firstClass = bucket[0],
                   element =
@@ -506,8 +592,10 @@
                   return `${ann}${ind}${visibility} readonly ${p.type} $${p.key};`;
                 })
                 .join("\n"),
-              useSection = useLines.join("\n").replace(/\\/g, "\\");
-            return `<?php\n\n${useSection}\n\nclass ${cls.name} extends ${cls.baseType} {\n${propsCode}\n}`;
+              useSection = useLines.join("\n").replace(/\\/g, "\\"),
+              namespaceToUse = cls.namespace || namespaceValue.value,
+              namespaceSection = namespaceToUse ? `namespace ${namespaceToUse};\n\n` : "";
+            return `<?php\n\n${namespaceSection}${useSection}\n\nclass ${cls.name} extends ${cls.baseType} {\n${propsCode}\n}`;
           },
           highlightPhp = (code, currentClassName) => {
             let placeholders = [],
@@ -548,6 +636,11 @@
                 '<span style="color:#569cd6">extends</span>'
               )
               .replace(/\buse\b/g, '<span style="color:#569cd6">use</span>')
+              .replace(/\bnamespace\b/g, '<span style="color:#569cd6">namespace</span>')
+              .replace(
+                /(<span style="color:#569cd6">namespace<\/span>)\s+([\w\\]+)/g,
+                '$1 <span style="color:#4ec9b0">$2</span>'
+              )
               .replace(
                 /(<span style="color:#569cd6">class<\/span>)\s+(\w+)/g,
                 '$1 <span style="color:#4ec9b0">$2</span>'
@@ -612,19 +705,24 @@
               hour: "2-digit",
               minute: "2-digit",
             }),
-              ids = [];
+              ids = [],
+              currentNamespace = namespaceValue.value,
+              batchId = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
             for (let i = bucket.length - 1; i >= 0; i--) {
               const cls = bucket[i],
                 id = `${Date.now()}_${Math.random()
                   .toString(36)
                   .substr(2, 9)}`;
+              cls.namespace = currentNamespace;
               history.value.unshift({
                 id,
+                batchId,
                 classData: JSON.parse(JSON.stringify(cls)),
                 className: cls.name,
                 baseType: cls.baseType,
                 propCount: cls.props.length,
                 timestamp,
+                namespace: currentNamespace,
                 code: renderClass(cls),
               });
               ids.unshift(id);
@@ -632,11 +730,17 @@
             if (history.value.length > 10)
               history.value = history.value.slice(0, 10);
             saveHistoryToStorage();
-            return ids;
+            return { ids, batchId };
           },
           loadFromHistory = (item) => {
             classes.value = [JSON.parse(JSON.stringify(item.classData))];
             currentHistoryItemId.value = item.id;
+            currentBatchId.value = item.batchId || null;
+            isFromHistory.value = true;
+            if (item.namespace !== undefined) {
+              namespaceValue.value = item.namespace;
+              saveNamespaceToStorage();
+            }
             setTimeout(() => {
               const element = document.getElementById(
                 `class-${item.className}`
@@ -717,16 +821,11 @@
           },
           updateHistoryBaseType = (cls) => {
             let historyItem;
-            if (currentHistoryItemId.value) {
+            if (currentBatchId.value) {
               historyItem = history.value.find(
                 (item) =>
-                  item.id === currentHistoryItemId.value &&
+                  item.batchId === currentBatchId.value &&
                   item.className === cls.name
-              );
-            }
-            if (!historyItem) {
-              historyItem = history.value.find(
-                (item) => item.className === cls.name
               );
             }
             if (historyItem) {
@@ -752,15 +851,22 @@
             convertHistory.value.unshift({
               json: formattedJson,
               timestamp,
+              namespace: namespaceValue.value,
               preview:
                 json.substring(0, 100) + (json.length > 100 ? "..." : ""),
             });
             if (convertHistory.value.length > 10)
               convertHistory.value = convertHistory.value.slice(0, 10);
             saveConvertHistoryToStorage();
+            return 0; // 返回新添加項目的索引
           },
-          loadFromConvertHistory = (item) => {
+          loadFromConvertHistory = (item, idx) => {
             jsonText.value = item.json;
+            currentConvertHistoryIndex.value = idx;
+            if (item.namespace !== undefined) {
+              namespaceValue.value = item.namespace;
+              saveNamespaceToStorage();
+            }
             setTimeout(() => {
               window.scrollTo({ top: 0, behavior: "smooth" });
               const textarea = document.querySelector("textarea");
@@ -829,6 +935,7 @@
           convertHistory,
           convertHistoryExpanded,
           currentLang,
+          namespaceValue,
           convert,
           highlightPhp,
           renderClass,
@@ -844,6 +951,8 @@
           toggleConvertHistory,
           toggleRecentHistory,
           formatJson,
+          saveNamespaceToStorage,
+          updateNamespace,
           t,
           toggleLanguage,
         };
