@@ -382,6 +382,10 @@
                 (v4)</span>
             </div>
           </div>
+          <div v-if="cls.baseType === 'SingleValueObject' && versionValue === 'v3'"
+            class="text-red-500 text-xs font-semibold mb-2" :class="{'zh-text':currentLang==='zh-TW'}">
+            {{ t('SingleValueObjectNotSupported') }}
+          </div>
           <div v-if="getExtractableProps(cls).length > 0 && cls.baseType !== 'SingleValueObject'"
             class="flex flex-wrap gap-2 text-xs mb-2">
             <span class="text-gray-600 font-semibold flex items-center" :class="{'zh-text':currentLang==='zh-TW'}">
@@ -395,6 +399,7 @@
           </div>
           <div :ref="`block-${cls.name}`"
             class="relative bg-[#1e1e1e] text-sm p-4 rounded-lg font-mono border border-gray-700 text-white"
+            :class="{ 'line-through opacity-70': cls.baseType === 'SingleValueObject' && versionValue === 'v3' }"
             style="overflow-x: auto; overflow-y: visible">
             <div class="absolute top-2 right-2" style="z-index: 10">
               <button @click="copyToClipboard(renderClass(cls),$event)"
@@ -450,6 +455,7 @@
             copy: "複製",
             copied: "已複製",
             "Insert JSON to convert": "插入 JSON 以進行轉換",
+            "SingleValueObjectNotSupported": "⚠️ SingleValueObject 基類及自動驗證鏈僅於 v4+ 版本提供",
           },
           en: {
             "Convert History": "Convert History",
@@ -460,6 +466,7 @@
             copy: "Copy",
             copied: "Copied",
             "Insert JSON to convert": "Insert JSON to convert",
+            "SingleValueObjectNotSupported": "⚠️ SingleValueObject base class and automatic validation chain are only available in v4+",
           },
         },
           detectLanguage = () =>
