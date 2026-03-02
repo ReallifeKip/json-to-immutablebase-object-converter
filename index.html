@@ -5,55 +5,56 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <meta name="description" content="This is a lightweight web tool designed for seamless integration with ImmutableBase. It allows you to easily convert plain JSON data into fully structured ImmutableBase objects, helping developers bridge the gap between raw data and immutable architecture with just a few clicks.">
+  <meta name="description"
+    content="This is a lightweight web tool designed for seamless integration with ImmutableBase. It allows you to easily convert plain JSON data into fully structured ImmutableBase objects, helping developers bridge the gap between raw data and immutable architecture with just a few clicks.">
   <meta name="description" lang="zh-Hant" content="這是一款輕量級的網頁工具，專為與 ImmutableBase 無縫整合而設計。
-  它能輕鬆將純 JSON 資料轉換成完整結構的 ImmutableBase 物件，幫助開發者在「原始資料」與「不可變架構」之間快速搭起橋樑，只需幾個點擊即可完成。"> 
-  
+  它能輕鬆將純 JSON 資料轉換成完整結構的 ImmutableBase 物件，幫助開發者在「原始資料」與「不可變架構」之間快速搭起橋樑，只需幾個點擊即可完成。">
+
   <meta property="og:type" content="website">
   <meta property="og:title" content="JSON to ImmutableBase Object Converter">
-  <meta property="og:description" content="This is a lightweight web tool designed for seamless integration with ImmutableBase. It allows you to easily convert plain JSON data into fully structured ImmutableBase objects, helping developers bridge the gap between raw data and immutable architecture with just a few clicks.">
+  <meta property="og:description"
+    content="This is a lightweight web tool designed for seamless integration with ImmutableBase. It allows you to easily convert plain JSON data into fully structured ImmutableBase objects, helping developers bridge the gap between raw data and immutable architecture with just a few clicks.">
   <meta property="og:description" lang="zh-Hant" content="這是一款輕量級的網頁工具，專為與 ImmutableBase 無縫整合而設計。
   它能輕鬆將純 JSON 資料轉換成完整結構的 ImmutableBase 物件，幫助開發者在「原始資料」與「不可變架構」之間快速搭起橋樑，只需幾個點擊即可完成。">
   <meta property="og:url" content="https://your-domain.com/">
   <meta property="og:site_name" content="JSON to ImmutableBase Converter">
   <meta property="og:image" content="https://your-domain.com/preview-image.jpg">
-  
+
   <meta name="twitter:card" content="summary_large_image">
   <meta name="twitter:title" content="JSON to ImmutableBase Object Converter">
-  <meta name="twitter:description" content="This is a lightweight web tool designed for seamless integration with ImmutableBase. It allows you to easily convert plain JSON data into fully structured ImmutableBase objects, helping developers bridge the gap between raw data and immutable architecture with just a few clicks.">
+  <meta name="twitter:description"
+    content="This is a lightweight web tool designed for seamless integration with ImmutableBase. It allows you to easily convert plain JSON data into fully structured ImmutableBase objects, helping developers bridge the gap between raw data and immutable architecture with just a few clicks.">
   <meta name="twitter:image" content="https://your-domain.com/preview-image.jpg">
-  
+
   <meta property="og:locale" content="en_US">
   <meta property="og:locale:alternate" content="zh_TW">
 
   <title>JSON to ImmutableBase Object Converter</title>
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
-  <link href="https://fonts.googleapis.com/css2?family=Courgette&family=Kosugi+Maru&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css" />
   <script src="https://unpkg.com/vue@3/dist/vue.global.prod.js"></script>
   <script src="https://cdn.tailwindcss.com"></script>
 
-  
+
   <style>
     @keyframes highlight-glow {
 
       0%,
       100% {
-        box-shadow: 0 1px 3px 0 rgb(0 0 0/0.1), 0 1px 2px -1px rgb(0 0 0/0.1);
+        scale: 1;
       }
 
-      25%,
-      75% {
-        box-shadow: 0 0 20px 5px rgba(59, 130, 246, 0.6),
-          0 0 40px 10px rgba(59, 130, 246, 0.4),
-          0 0 60px 15px rgba(59, 130, 246, 0.2);
+      25% {
+        scale: 1.025;
       }
 
       50% {
-        box-shadow: 0 0 30px 8px rgba(59, 130, 246, 0.8),
-          0 0 60px 15px rgba(59, 130, 246, 0.5),
-          0 0 90px 20px rgba(59, 130, 246, 0.3);
+        scale: 1;
+      }
+
+      75% {
+        scale: 1.025;
       }
     }
 
@@ -98,20 +99,6 @@
       z-index: 99999;
     }
 
-    #title,
-    #convert,
-    #format {
-      font-family: "Courgette", cursive;
-      letter-spacing: 0.05em;
-    }
-
-    .zh-text,
-    .zh-text#convert,
-    .zh-text#format,
-    #title .zh-text {
-      font-family: "Kosugi Maru", sans-serif !important;
-    }
-
     .history-item {
       transition: all 0.2s ease;
       position: relative;
@@ -142,10 +129,17 @@
       opacity: 1;
     }
 
-    .scroll-to-top {
+    .scroll-fab {
       position: fixed;
       bottom: 2rem;
       right: 2rem;
+      display: flex;
+      flex-direction: column;
+      gap: 0.5rem;
+      z-index: 9999;
+    }
+
+    .scroll-to-top {
       width: 3rem;
       height: 3rem;
       background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
@@ -156,17 +150,50 @@
       justify-content: center;
       cursor: pointer;
       box-shadow: 0 4px 12px rgba(59, 130, 246, 0.4);
-      transition: all 0.3s ease;
-      z-index: 9999;
+
       opacity: 0;
-      visibility: hidden;
-      transform: scale(0.8);
+      pointer-events: none;
     }
 
+    /* 出現動畫 */
     .scroll-to-top.visible {
-      opacity: 1;
-      visibility: visible;
-      transform: scale(1);
+      animation: fadeIn 0.25s ease forwards;
+      pointer-events: auto;
+    }
+
+    /* 消失動畫（關鍵） */
+    .scroll-to-top:not(.visible) {
+      animation: fadeOut 0.25s ease forwards;
+    }
+
+    /* keyframes */
+    @keyframes fadeIn {
+      0% {
+        display: flex;
+        opacity: 0;
+      }
+
+      100% {
+        display: flex;
+        opacity: 1;
+      }
+    }
+
+    @keyframes fadeOut {
+      0% {
+        display: flex;
+        opacity: 1;
+      }
+
+      99% {
+        display: flex;
+        opacity: 0;
+      }
+
+      100% {
+        display: none;
+        opacity: 0;
+      }
     }
 
     .scroll-to-top:hover {
@@ -195,7 +222,7 @@
 </head>
 
 <body class="bg-gray-100 min-h-screen flex items-center justify-center p-6">
-  <div id="app" class="w-full max-w-5xl bg-white shadow-lg rounded-xl p-6">
+  <div id="app" class="w-full max-w-5xl bg-white shadow-lg rounded-xl p-6 flex flex-col gap-3">
     <div class="fixed top-4 right-4 z-50">
       <button @click="toggleLanguage"
         class="bg-white hover:bg-gray-100 text-gray-700 px-3 py-2 rounded-lg shadow-md transition text-sm font-semibold border border-gray-200"
@@ -240,7 +267,7 @@
     <div v-if="error" class="mt-4 bg-red-100 text-red-700 px-3 py-2 rounded text-sm font-mono">
       {{error}}
     </div>
-    <div v-if="convertHistory.length" id="convert-history" class="mt-6 bg-blue-50 rounded-lg p-4">
+    <div v-if="convertHistory.length" id="convert-history" class="bg-blue-50 rounded-lg p-4">
       <div @click="toggleConvertHistory" class="flex items-center justify-between cursor-pointer">
         <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -264,7 +291,8 @@
                 <div class="text-sm font-medium text-gray-800">
                   {{item.timestamp}}
                 </div>
-                <span v-if="item.namespace" class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-mono">{{item.namespace}}</span>
+                <span v-if="item.namespace"
+                  class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-mono">{{item.namespace}}</span>
               </div>
               <div class="text-xs text-gray-500 mt-1 font-mono truncate">
                 {{item.preview}}
@@ -274,7 +302,7 @@
         </div>
       </div>
     </div>
-    <div v-if="history.length" id="recent-history" class="mt-6 bg-gray-50 rounded-lg p-4">
+    <div v-if="history.length" id="recent-history" class="bg-gray-50 rounded-lg p-4">
       <div @click="toggleRecentHistory" class="flex items-center justify-between cursor-pointer">
         <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2">
           <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -299,7 +327,8 @@
             </div>
             <span class="text-xs px-2 py-0.5 rounded-full"
               :class="item.baseType==='ValueObject'?'bg-purple-100 text-purple-700':'bg-blue-100 text-blue-700'">{{item.baseType}}</span>
-            <span v-if="item.namespace" class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-mono">{{item.namespace}}</span>
+            <span v-if="item.namespace"
+              class="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700 font-mono">{{item.namespace}}</span>
           </div>
           <div class="text-xs text-gray-500 mt-1">
             {{item.propCount}} properties · {{item.timestamp}}
@@ -307,51 +336,91 @@
         </div>
       </div>
     </div>
-    <div v-if="classes.length" class="mt-6 rounded-lg">
-      <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2 mb-3">
-        <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-            d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
-        </svg>
-        <span :class="{'zh-text':currentLang==='zh-TW'}">Namespace</span>
-      </h2>
-      <input v-model="namespaceValue" @input="updateNamespace" type="text"
-        :placeholder="currentLang==='zh-TW'?'輸入 namespace (選填)':'Enter namespace (optional)'"
-        class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm" />
-    </div>
-    <div v-if="classes.length" class="mt-6 space-y-6">
-      <div v-for="cls in classes" :key="cls.name" :id="`class-${cls.name}`" class="space-y-1">
-        <div class="flex items-center justify-between gap-2">
-          <h2 class="font-bold text-xl">{{cls.name}}</h2>
-          <div class="flex gap-2 items-center">
-            <span class="text-sm font-semibold text-gray-700">Extends</span>
-            <select v-model="cls.baseType" @change="updateHistoryBaseType(cls)"
-              class="text-xs bg-gray-200 border border-gray-400 rounded px-2 py-1">
-              <option value="DataTransferObject">DataTransferObject</option>
-              <option value="ValueObject">ValueObject</option>
-            </select>
-          </div>
+    <div v-if="classes.length" class="flex flex-col">
+      <div class="sticky top-0 bg-white flex gap-4" style="z-index: 999">
+        <div class="flex-1 rounded-lg">
+          <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M7 20l4-16m2 16l4-16M6 9h14M4 15h14" />
+            </svg>
+            <span :class="{'zh-text':currentLang==='zh-TW'}">Namespace</span>
+          </h2>
+          <input v-model="namespaceValue" @input="updateNamespace" type="text"
+            :placeholder="currentLang==='zh-TW'?'輸入 namespace (選填)':'Enter namespace (optional)'"
+            class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm mb-3" />
         </div>
-        <div :ref="`block-${cls.name}`"
-          class="relative bg-[#1e1e1e] text-sm p-4 rounded-lg font-mono border border-gray-700 text-white"
-          style="overflow-x: auto; overflow-y: visible">
-          <div class="absolute top-2 right-2" style="z-index: 10">
-            <button @click="copyToClipboard(renderClass(cls),$event)"
-              class="relative text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded transition"
-              :class="{'zh-text':currentLang==='zh-TW'}">
-              {{t('copy')}}
+        <div class="w-32 rounded-lg">
+          <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                d="M12 6V4m0 2a2 2 0 100 4m0-4a2 2 0 110 4m-6 8a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4m6 6v10m6-2a2 2 0 100-4m0 4a2 2 0 110-4m0 4v2m0-6V4" />
+            </svg>
+            <span :class="{'zh-text':currentLang==='zh-TW'}">Version</span>
+          </h2>
+          <select v-model="versionValue" @change="updateVersion"
+            class="w-full p-3 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 font-mono text-sm mb-3">
+            <option value="v4">v4</option>
+            <option value="v3">v3</option>
+          </select>
+        </div>
+      </div>
+      <div v-if="classes.length" class="space-y-6">
+        <div v-for="cls in classes" :key="cls.name" :id="`class-${cls.name}`" class="space-y-1">
+          <div class="flex items-center justify-between gap-2">
+            <h2 class="font-bold text-xl">{{cls.name}}</h2>
+            <div class="flex gap-2 items-center">
+              <span v-if="cls.baseType!=='SingleValueObject'" class="text-sm font-semibold text-gray-700">Extends</span>
+              <select v-if="cls.baseType!=='SingleValueObject'" v-model="cls.baseType"
+                @change="updateHistoryBaseType(cls)"
+                class="text-xs bg-gray-200 border border-gray-400 rounded px-2 py-1">
+                <option value="DataTransferObject">DataTransferObject</option>
+                <option value="ValueObject">ValueObject</option>
+              </select>
+              <span v-else
+                class="text-xs font-semibold px-2 py-1 bg-yellow-100 text-yellow-800 rounded">SingleValueObject
+                (v4)</span>
+            </div>
+          </div>
+          <div v-if="getExtractableProps(cls).length > 0 && cls.baseType !== 'SingleValueObject'"
+            class="flex flex-wrap gap-2 text-xs mb-2">
+            <span class="text-gray-600 font-semibold flex items-center" :class="{'zh-text':currentLang==='zh-TW'}">
+              {{currentLang==='zh-TW'?'抽取為 SingleValueObject:':'Extract to SingleValueObject:'}}
+            </span>
+            <button v-for="prop in getExtractableProps(cls)" :key="prop.key" @click="toggleExtractProperty(cls, prop)"
+              class="px-2 py-1 rounded transition-colors"
+              :class="prop.isExtracted ? 'bg-blue-100 border border-blue-400 text-blue-700' : 'bg-gray-100 border border-gray-300 text-gray-700 hover:bg-gray-200'">
+              {{prop.key}}
             </button>
           </div>
-          <pre v-html="highlightPhp(renderClass(cls),cls.name)" class="whitespace-pre-wrap"></pre>
+          <div :ref="`block-${cls.name}`"
+            class="relative bg-[#1e1e1e] text-sm p-4 rounded-lg font-mono border border-gray-700 text-white"
+            style="overflow-x: auto; overflow-y: visible">
+            <div class="absolute top-2 right-2" style="z-index: 10">
+              <button @click="copyToClipboard(renderClass(cls),$event)"
+                class="relative text-xs bg-gray-700 hover:bg-gray-600 text-white px-2 py-1 rounded transition"
+                :class="{'zh-text':currentLang==='zh-TW'}">
+                {{t('copy')}}
+              </button>
+            </div>
+            <pre v-html="highlightPhp(renderClass(cls),cls.name)" class="whitespace-pre-wrap"></pre>
+          </div>
         </div>
       </div>
     </div>
-  </div>
-  <div id="scrollToTop" class="scroll-to-top">
-    <i class="fas fa-arrow-up"></i>
+    <!-- Button to scroll back to original class after extraction -->
+    <div class="scroll-fab">
+      <button id="goToOrigin" class="scroll-to-top" :class="{ visible: originTargetId }" @click="scrollToOrigin">
+        <i class="fas fa-reply"></i>
+      </button>
+
+      <div id="scrollToTop" class="scroll-to-top" :class="{ visible: showScrollTop }">
+        <i class="fas fa-arrow-up"></i>
+      </div>
+    </div>
   </div>
   <script lang="ts">
-    const { createApp, ref } = Vue;
+    const { createApp, ref, nextTick, onMounted, onUnmounted } = Vue;
     createApp({
       setup() {
         let jsonText = ref(""),
@@ -366,7 +435,10 @@
           currentBatchId = ref(null),
           currentConvertHistoryIndex = ref(null),
           isFromHistory = ref(false),
-          namespaceValue = ref("");
+          namespaceValue = ref(""),
+          versionValue = ref("v4"),
+          extractionMap = ref({}),
+          originTargetId = ref(null);
 
         const translations = {
           "zh-TW": {
@@ -454,6 +526,63 @@
               console.error("Failed to save namespace:", e);
             }
           },
+          loadVersionFromStorage = () => {
+            try {
+              const stored = localStorage.getItem("versionValue");
+              if (stored) versionValue.value = stored;
+            } catch (e) {
+              console.error("Failed to load version:", e);
+            }
+          },
+          saveVersionToStorage = () => {
+            try {
+              localStorage.setItem("versionValue", versionValue.value);
+            } catch (e) {
+              console.error("Failed to save version:", e);
+            }
+          },
+          updateVersion = () => {
+            saveVersionToStorage();
+            classes.value.forEach(cls => {
+              cls.version = versionValue.value;
+            });
+            if (isFromHistory.value) {
+              if (currentHistoryItemId.value) {
+                const historyItem = history.value.find(
+                  item => item.id === currentHistoryItemId.value
+                );
+                if (historyItem) {
+                  historyItem.version = versionValue.value;
+                  if (historyItem.classData) {
+                    historyItem.classData.version = versionValue.value;
+                    historyItem.code = renderClass(historyItem.classData);
+                  }
+                  saveHistoryToStorage();
+                }
+              }
+            } else {
+              if (currentBatchId.value) {
+                const historyItems = history.value.filter(
+                  item => item.batchId === currentBatchId.value
+                );
+                historyItems.forEach(item => {
+                  item.version = versionValue.value;
+                  if (item.classData) {
+                    item.classData.version = versionValue.value;
+                    item.code = renderClass(item.classData);
+                  }
+                });
+                saveHistoryToStorage();
+              }
+              if (currentConvertHistoryIndex.value !== null) {
+                const convertHistoryItem = convertHistory.value[currentConvertHistoryIndex.value];
+                if (convertHistoryItem) {
+                  convertHistoryItem.version = versionValue.value;
+                  saveConvertHistoryToStorage();
+                }
+              }
+            }
+          },
           updateNamespace = () => {
             saveNamespaceToStorage();
             // 更新當前所有類別的 namespace
@@ -505,6 +634,7 @@
         loadHistoryFromStorage();
         loadConvertHistoryFromStorage();
         loadNamespaceFromStorage();
+        loadVersionFromStorage();
 
         function walkJson(name, json, bucket, seen, depth = 0, order = 0) {
           const className = name[0].toUpperCase() + name.slice(1);
@@ -540,7 +670,7 @@
               type = Number.isInteger(value) ? "int" : "float";
             else if (typeof value === "boolean") type = "bool";
             else if (typeof value === "string") type = "string";
-            props.push({ key, type, annotations });
+            props.push({ key, type, annotations, isExtracted: false, originalType: type });
           }
           bucket.push({
             name: className,
@@ -555,6 +685,8 @@
         const convert = () => {
           error.value = "";
           classes.value = [];
+          extractionMap.value = {};
+          originTargetId.value = null;
           try {
             const parsed = JSON.parse(jsonText.value),
               bucket = [];
@@ -580,7 +712,7 @@
                     document.getElementById(`class-${firstClass.name}`);
                 if (element) {
                   const rect = element.getBoundingClientRect(),
-                    targetScroll = window.scrollY + rect.top - 16;
+                    targetScroll = window.scrollY + rect.top - 110;
                   window.scrollTo({
                     top: targetScroll,
                     behavior: "smooth",
@@ -592,17 +724,118 @@
             error.value = `⚠️ Invalid JSON: ${e.message}`;
           }
         },
+          getExtractableProps = (cls) => {
+            if (cls.baseType === 'SingleValueObject') return [];
+            return cls.props.filter(p => ['int', 'float', 'bool', 'string', 'mixed'].includes(p.originalType));
+          },
+          syncHistoryBatch = () => {
+            if (!currentBatchId.value) return;
+            const newHistoryBatch = [];
+            const timestamp = new Date().toLocaleString("zh-TW", {
+              month: "2-digit",
+              day: "2-digit",
+              hour: "2-digit",
+              minute: "2-digit",
+            });
+            const currentNamespace = namespaceValue.value;
+            for (let i = 0; i < classes.value.length; i++) {
+              const cls = classes.value[i];
+              const id = `${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+              newHistoryBatch.push({
+                id,
+                batchId: currentBatchId.value,
+                classData: JSON.parse(JSON.stringify(cls)),
+                className: cls.name,
+                baseType: cls.baseType,
+                propCount: cls.props.length,
+                timestamp,
+                namespace: cls.namespace || currentNamespace,
+                version: cls.version || versionValue.value,
+                code: renderClass(cls),
+              });
+            }
+            // Filter out old batch items and prepend new ones
+            const remainingHistory = history.value.filter(item => item.batchId !== currentBatchId.value);
+            history.value = [...newHistoryBatch, ...remainingHistory].slice(0, 10);
+            saveHistoryToStorage();
+          },
+          toggleExtractProperty = (cls, prop) => {
+            prop.isExtracted = !prop.isExtracted;
+            const newClassName = cls.name + prop.key.charAt(0).toUpperCase() + prop.key.slice(1);
+            const originalClassId = `class-${cls.name}`;
+
+            if (prop.isExtracted) {
+              prop.type = newClassName;
+              const newClass = {
+                name: newClassName,
+                props: [{ key: 'value', type: prop.originalType, annotations: '', isExtracted: false, originalType: prop.originalType }],
+                usesArrayOf: false,
+                baseType: 'SingleValueObject',
+                depth: cls.depth,
+                order: cls.order,
+                version: 'v4',
+                namespace: cls.namespace || namespaceValue.value
+              };
+              classes.value.push(newClass);
+              // Record mapping for scroll back
+              extractionMap.value[newClassName] = originalClassId;
+              // Set origin target for go-to-origin button
+              originTargetId.value = originalClassId;
+              // Scroll to the newly created class after DOM update
+              nextTick(() => {
+                const el = document.getElementById(`class-${newClassName}`);
+                if (el) {
+                  const rect = el.getBoundingClientRect();
+                  const targetScroll = window.scrollY + rect.top - 16;
+                  window.scrollTo({ top: targetScroll, behavior: 'smooth' });
+
+                  const codeBlock = el.querySelector(".bg-\\[\\#1e1e1e\\]");
+                  if (codeBlock) {
+                    codeBlock.classList.remove("highlight-block");
+                    void codeBlock.offsetWidth;
+                    codeBlock.classList.add("highlight-block");
+                    setTimeout(() => codeBlock.classList.remove("highlight-block"), 1500);
+                  }
+                }
+              });
+            } else {
+              prop.type = prop.originalType;
+              const idx = classes.value.findIndex(c => c.name === newClassName && c.baseType === 'SingleValueObject');
+              if (idx !== -1) {
+                classes.value.splice(idx, 1);
+                delete extractionMap.value[newClassName];
+              }
+              // If no more extracted classes, clear origin target
+              if (Object.keys(extractionMap.value).length === 0) {
+                originTargetId.value = null;
+              }
+            }
+            if (currentBatchId.value) {
+              syncHistoryBatch();
+            }
+          },
           renderClass = (cls) => {
             const useLines = [];
-            if (cls.usesArrayOf)
-              useLines.push("use ReallifeKip\\ImmutableBase\\ArrayOf;");
-            useLines.push(
-              cls.baseType === "DataTransferObject"
-                ? "use ReallifeKip\\ImmutableBase\\Objects\\DataTransferObject;"
-                : "use ReallifeKip\\ImmutableBase\\Objects\\ValueObject;"
-            );
+            const currentItemVersion = cls.baseType === "SingleValueObject" ? "v4" : (cls.version || versionValue.value);
+            const isV4 = currentItemVersion === "v4";
+            if (cls.usesArrayOf) {
+              const arrayOfNs = isV4 ? "ReallifeKip\\ImmutableBase\\Attributes\\ArrayOf" : "ReallifeKip\\ImmutableBase\\ArrayOf";
+              useLines.push(`use ${arrayOfNs};`);
+            }
+
+            if (cls.baseType === "SingleValueObject") {
+              useLines.push("use ReallifeKip\\ImmutableBase\\Objects\\SingleValueObject;");
+            } else if (cls.baseType === "DataTransferObject") {
+              useLines.push("use ReallifeKip\\ImmutableBase\\Objects\\DataTransferObject;");
+            } else {
+              useLines.push("use ReallifeKip\\ImmutableBase\\Objects\\ValueObject;");
+            }
+
+            const classPrefix = isV4 ? "readonly class" : "class";
+            const propertyReadonly = isV4 ? "" : "readonly ";
+
             const visibility =
-              cls.baseType === "ValueObject" ? "private" : "public",
+              isV4 ? "public" : cls.baseType === "ValueObject" ? "private" : "public",
               propsCode = cls.props
                 .map((p) => {
                   const ind = "    ",
@@ -613,18 +846,26 @@
                         .map((l) => `${ind}${l}`)
                         .join("\n") + "\n"
                       : "";
-                  return `${ann}${ind}${visibility} readonly ${p.type} $${p.key};`;
+                  return `${ann}${ind}${visibility} ${propertyReadonly}${p.type} $${p.key};`;
                 })
                 .join("\n"),
               useSection = useLines.join("\n").replace(/\\/g, "\\"),
               namespaceToUse = cls.namespace || namespaceValue.value,
               namespaceSection = namespaceToUse ? `namespace ${namespaceToUse};\n\n` : "";
-            return `<?php\n\n${namespaceSection}${useSection}\n\nclass ${cls.name} extends ${cls.baseType} {\n${propsCode}\n}`;
+            const validateMethod = (cls.baseType === "SingleValueObject" || (isV4 && cls.baseType === "ValueObject"))
+              ? `\n    public function validate(): bool\n    {\n        return true;\n    }`
+              : "";
+            return `<?php\n\n${namespaceSection}${useSection}\n\n${classPrefix} ${cls.name} extends ${cls.baseType}\n{\n${propsCode}${validateMethod}\n}`;
           },
           highlightPhp = (code, currentClassName) => {
             let placeholders = [],
               i = 0;
             const classNames = classes.value.map((c) => c.name);
+            const classHighlighter = (match) =>
+              classNames.includes(match) && match !== currentClassName
+                ? `<span style="color:#4ec9b0" class="type-link" onclick="scrollToClass('${match}', '${currentClassName}')">${match}</span>`
+                : `<span style="color:#4ec9b0">${match}</span>`;
+
             let out = code
               .replace(/&/g, "__AMP__")
               .replace(/</g, "__LT__")
@@ -634,13 +875,36 @@
                 '<span style="color:#569cd6">__LT__?php</span>'
               )
               .replace(
+                /(\/\/[^\n]*)/g,
+                (m) => {
+                  const sub = m
+                    .replace(/(@var)/g, '<span style="color:#569cd6">$1</span>')
+                    .replace(/(\[\])/g, '<span style="color:#569cd6">$1</span>');
+                  const key = `__SPAN_${i++}__`;
+                  placeholders.push({ key, value: `<span style="color:#6a9955">${sub}</span>` });
+                  return key;
+                }
+              )
+              .replace(
                 /(\/\*\*[^*]*\*+(?:[^\/*][^*]*\*+)*\/)/g,
-                '<span style="color:#6a9955">$1</span>'
+                (m) => {
+                  const sub = m
+                    .replace(/(@var)/g, '<span style="color:#569cd6">$1</span>')
+                    .replace(/(\[\])/g, '<span style="color:#569cd6">$1</span>')
+                    .replace(/\b(?!ArrayOf)([A-Z][\w]*)\b/g, (m) => classHighlighter(m));
+                  const key = `__SPAN_${i++}__`;
+                  placeholders.push({ key, value: `<span style="color:#6a9955">${sub}</span>` });
+                  return key;
+                }
               )
               .replace(/@var/g, '<span style="color:#569cd6">@var</span>')
               .replace(
+                /ReallifeKip\\ImmutableBase\\Attributes\\ArrayOf/g,
+                "__NS_ARRAYOF_V4__"
+              )
+              .replace(
                 /ReallifeKip\\ImmutableBase\\ArrayOf/g,
-                "__NS_ARRAYOF__"
+                "__NS_ARRAYOF_V3__"
               )
               .replace(
                 /ReallifeKip\\ImmutableBase\\Objects\\/g,
@@ -650,17 +914,13 @@
                 /ReallifeKip\\ImmutableBase\\/g,
                 '<span style="color:white">ReallifeKip\\ImmutableBase\\</span>'
               )
-              .replace(/ArrayOf/g, '<span style="color:white">ArrayOf</span>')
+              .replace(/ArrayOf/g, '<span>ArrayOf</span>')
               .replace(
-                /\bclass\b/g,
-                '<span style="color:#569cd6">class</span>'
+                /\b(class|extends|use|namespace|function|public|private|readonly|int|float|bool|string|mixed|array|true|false|null)\b/g,
+                '<span style="color:#569cd6">$1</span>'
               )
-              .replace(
-                /\bextends\b/g,
-                '<span style="color:#569cd6">extends</span>'
-              )
-              .replace(/\buse\b/g, '<span style="color:#569cd6">use</span>')
-              .replace(/\bnamespace\b/g, '<span style="color:#569cd6">namespace</span>')
+              .replace(/\breturn\b/g, '<span style="color:#c586c0">return</span>')
+              .replace(/\$this\b/g, '<span style="color:#569cd6">$this</span>')
               .replace(
                 /(<span style="color:#569cd6">namespace<\/span>)\s+([\w\\]+)/g,
                 '$1 <span style="color:#4ec9b0">$2</span>'
@@ -670,20 +930,28 @@
                 '$1 <span style="color:#4ec9b0">$2</span>'
               )
               .replace(
-                /\b(public|private|readonly|int|float|bool|string|mixed|array)\b/g,
-                '<span style="color:#569cd6">$1</span>'
+                /(function<\/span>\s+)(\w+)/g,
+                '$1<span style="color:#dcdcaa">$2</span>'
               )
               .replace(
                 /#\[([^\]]+)\]/g,
-                '<span style="color:#da70d6">#[</span>$1<span style="color:#da70d6">]</span>'
+                (m, content) => {
+                  const sub = content
+                    .replace(/\bclass\b/g, '<span style="color:#569cd6">class</span>')
+                    .replace(/\bArrayOf\b/g, '<span>ArrayOf</span>')
+                    .replace(/\b(?!ArrayOf)([A-Z][\w]*)\b/g, (m) => classHighlighter(m));
+                  const key = `__SPAN_${i++}__`;
+                  placeholders.push({ key, value: `<span style="color:#da70d6">#[</span>${sub}<span style="color:#da70d6">]</span>` });
+                  return key;
+                }
               )
-              .replace(/\$\w+/g, '<span style="color:#9cdcfe">$&</span>')
+              .replace(/\$(?!this\b)\w+/g, '<span style="color:#9cdcfe">$&</span>')
+              .replace(/(-__GT__)(value)\b/g, '$1<span style="color:#9cdcfe">$2</span>')
+              .replace(/\(|\)/g, '<span style="color:#c586c0">$&</span>')
               .replace(/{/g, '<span style="color:#ffd700">{</span>')
               .replace(/}/g, '<span style="color:#ffd700">}</span>')
-              .replace(/;/g, '<span style="color:white">;</span>')
-              .replace(/__AMP__/g, "&amp;")
-              .replace(/__LT__/g, "&lt;")
-              .replace(/__GT__/g, "&gt;");
+              .replace(/;/g, '<span style="color:white">;</span>');
+
             out = out.replace(/<span[^>]*>.*?<\/span>/g, (m) => {
               const key = `__SPAN_${i++}__`;
               placeholders.push({ key, value: m });
@@ -691,17 +959,22 @@
             });
             out = out.replace(
               /\b(?!ArrayOf)([A-Z][A-Za-z0-9_]*)\b/g,
-              (match) =>
-                classNames.includes(match) && match !== currentClassName
-                  ? `<span style="color:#4ec9b0" class="type-link" onclick="scrollToClass('${match}')">${match}</span>`
-                  : `<span style="color:#4ec9b0">${match}</span>`
+              (match) => classHighlighter(match)
             );
             for (const { key, value } of placeholders)
               out = out.replace(new RegExp(key, "g"), value);
-            return out.replace(
-              /__NS_ARRAYOF__/g,
-              'ReallifeKip\\ImmutableBase\\<span style="color:#4ec9b0">ArrayOf</span>'
-            );
+            return out
+              .replace(
+                /__NS_ARRAYOF_V4__/g,
+                'ReallifeKip\\ImmutableBase\\Attributes\\<span style="color:#4ec9b0">ArrayOf</span>'
+              )
+              .replace(
+                /__NS_ARRAYOF_V3__/g,
+                'ReallifeKip\\ImmutableBase\\<span style="color:#4ec9b0">ArrayOf</span>'
+              )
+              .replace(/__AMP__/g, "&amp;")
+              .replace(/__LT__/g, "&lt;")
+              .replace(/__GT__/g, "&gt;");
           },
           copyToClipboard = async (text, event) => {
             try {
@@ -738,6 +1011,7 @@
                   .toString(36)
                   .substr(2, 9)}`;
               cls.namespace = currentNamespace;
+              cls.version = versionValue.value;
               history.value.unshift({
                 id,
                 batchId,
@@ -747,6 +1021,7 @@
                 propCount: cls.props.length,
                 timestamp,
                 namespace: currentNamespace,
+                version: versionValue.value,
                 code: renderClass(cls),
               });
               ids.unshift(id);
@@ -765,6 +1040,12 @@
               namespaceValue.value = item.namespace;
               saveNamespaceToStorage();
             }
+            if (item.version !== undefined) {
+              versionValue.value = item.version;
+            } else {
+              versionValue.value = "v3";
+            }
+            saveVersionToStorage();
             setTimeout(() => {
               const element = document.getElementById(
                 `class-${item.className}`
@@ -876,6 +1157,7 @@
               json: formattedJson,
               timestamp,
               namespace: namespaceValue.value,
+              version: versionValue.value,
               preview:
                 json.substring(0, 100) + (json.length > 100 ? "..." : ""),
             });
@@ -891,6 +1173,12 @@
               namespaceValue.value = item.namespace;
               saveNamespaceToStorage();
             }
+            if (item.version !== undefined) {
+              versionValue.value = item.version;
+            } else {
+              versionValue.value = "v3";
+            }
+            saveVersionToStorage();
             setTimeout(() => {
               window.scrollTo({ top: 0, behavior: "smooth" });
               const textarea = document.querySelector("textarea");
@@ -948,7 +1236,57 @@
             } catch (e) {
               error.value = `⚠️ Invalid JSON: ${e.message}`;
             }
+          },
+          scrollToOrigin = () => {
+            console.log('test')
+            if (originTargetId.value) {
+              const element = document.getElementById(originTargetId.value);
+              if (element) {
+                const rect = element.getBoundingClientRect();
+                const targetScroll = window.scrollY + rect.top - 16;
+                window.scrollTo({ top: targetScroll, behavior: "smooth" });
+
+                const codeBlock = element.querySelector(".bg-\\[\\#1e1e1e\\]");
+                if (codeBlock) {
+                  codeBlock.classList.remove("highlight-block");
+                  void codeBlock.offsetWidth; // Trigger reflow
+                  codeBlock.classList.add("highlight-block");
+                  setTimeout(() => codeBlock.classList.remove("highlight-block"), 1500);
+                }
+              }
+              originTargetId.value = null;
+            }
           };
+
+        Vue.onMounted(() => {
+          window.scrollToClass = (className, originName) => {
+            if (originName) {
+              originTargetId.value = `class-${originName}`;
+            }
+            const element = document.getElementById(`class-${className}`);
+            if (element) {
+              element.scrollIntoView({ behavior: "smooth", block: "center" });
+              const codeBlock = element.querySelector(".bg-\\[\\#1e1e1e\\]");
+              if (codeBlock) {
+                codeBlock.classList.remove("highlight-block");
+                void codeBlock.offsetWidth;
+                codeBlock.classList.add("highlight-block");
+                setTimeout(() => codeBlock.classList.remove("highlight-block"), 1500);
+              }
+            }
+          };
+
+          window.addEventListener("scroll", () => {
+            const scrollTopBtn = document.getElementById("scrollToTop");
+            if (scrollTopBtn) {
+              if (window.scrollY > 400) {
+                scrollTopBtn.classList.add("visible");
+              } else {
+                scrollTopBtn.classList.remove("visible");
+              }
+            }
+          });
+        });
 
         return {
           jsonText,
@@ -960,6 +1298,8 @@
           convertHistoryExpanded,
           currentLang,
           namespaceValue,
+          versionValue,
+          updateVersion,
           convert,
           highlightPhp,
           renderClass,
@@ -971,7 +1311,12 @@
           hidePreview,
           updatePreviewPosition,
           updateHistoryBaseType,
+          getExtractableProps,
+          toggleExtractProperty,
           loadFromConvertHistory,
+          extractionMap,
+          originTargetId,
+          scrollToOrigin,
           toggleConvertHistory,
           toggleRecentHistory,
           formatJson,
@@ -988,32 +1333,7 @@
       .addEventListener("click", () =>
         window.scrollTo({ top: 0, behavior: "smooth" })
       );
-    window.addEventListener("scroll", () => {
-      const scrollTopBtn = document.getElementById("scrollToTop");
-      if (scrollTopBtn)
-        scrollTopBtn.classList[window.scrollY > 400 ? "add" : "remove"](
-          "visible"
-        );
-    });
-
-    function scrollToClass(className) {
-      const element = document.getElementById(`class-${className}`);
-      if (element) {
-        element.scrollIntoView({ behavior: "smooth", block: "center" });
-        const codeBlock = element.querySelector(".bg-\\[\\#1e1e1e\\]");
-        if (codeBlock) {
-          codeBlock.classList.remove("highlight-block");
-          void codeBlock.offsetWidth;
-          codeBlock.classList.add("highlight-block");
-          setTimeout(
-            () => codeBlock.classList.remove("highlight-block"),
-            1500
-          );
-        }
-      }
-    }
   </script>
 </body>
 
 </html>
-
