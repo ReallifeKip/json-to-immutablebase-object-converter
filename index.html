@@ -267,6 +267,10 @@
     <div v-if="error" class="mt-4 bg-red-100 text-red-700 px-3 py-2 rounded text-sm font-mono">
       {{error}}
     </div>
+    <div v-for="notice in notices" :key="notice"
+      class="mt-4 bg-yellow-100 text-yellow-800 px-3 py-2 rounded text-sm" :class="{'zh-text':currentLang==='zh-TW'}">
+      {{t(notice)}}
+    </div>
     <div v-if="convertHistory.length" id="convert-history" class="bg-blue-50 rounded-lg p-4">
       <div @click="toggleConvertHistory" class="flex items-center justify-between cursor-pointer">
         <h2 class="text-lg font-semibold text-gray-700 flex items-center gap-2">
@@ -431,6 +435,7 @@
         let jsonText = ref(""),
           classes = ref([]),
           error = ref(""),
+          notices = ref([]),
           history = ref([]),
           historyExpanded = ref(false),
           convertHistory = ref([]),
@@ -456,6 +461,10 @@
             copied: "已複製",
             "Insert JSON to convert": "插入 JSON 以進行轉換",
             "SingleValueObjectNotSupported": "⚠️ SingleValueObject 基類及自動驗證鏈僅於 v4+ 版本提供",
+            rootNotObject: "⚠️ JSON 最外層必須是物件，或由物件組成的陣列",
+            rootArray: "ℹ️ JSON 最外層是陣列：Root 代表其中一個元素，請對每個元素呼叫 Root::fromArray()",
+            rootArrayWithNull: "ℹ️ JSON 最外層是陣列（含 null 元素）：Root 代表其中一個非 null 元素，請對每個元素呼叫 Root::fromArray()",
+            hasWarnings: "⚠️ 部分屬性無法完全自動對應，請查看程式碼中的 ⚠ 註解",
           },
           en: {
             "Convert History": "Convert History",
@@ -467,6 +476,10 @@
             copied: "Copied",
             "Insert JSON to convert": "Insert JSON to convert",
             "SingleValueObjectNotSupported": "⚠️ SingleValueObject base class and automatic validation chain are only available in v4+",
+            rootNotObject: "⚠️ The top level of the JSON must be an object or an array of objects",
+            rootArray: "ℹ️ The top level of the JSON is an array: Root describes one item, so call Root::fromArray() for each item",
+            rootArrayWithNull: "ℹ️ The top level of the JSON is an array with null items: Root describes one non-null item, so call Root::fromArray() for each item",
+            hasWarnings: "⚠️ Some properties could not be mapped fully automatically; see the ⚠ comments in the code",
           },
         },
           detectLanguage = () =>
@@ -643,66 +656,352 @@
         loadNamespaceFromStorage();
         loadVersionFromStorage();
 
-        function walkJson(name, json, bucket, seen, depth = 0, order = 0) {
-          const className = name[0].toUpperCase() + name.slice(1);
-          if (seen.has(className)) return;
-          seen.add(className);
-          let props = [],
-            usesArrayOf = false,
-            childOrder = 0;
-          for (const [key, value] of Object.entries(json)) {
-            let type = "mixed",
-              annotations = "";
-            if (value === null) type = "mixed";
-            else if (Array.isArray(value)) {
-              if (value.length && typeof value[0] === "object") {
-                const subName = key[0].toUpperCase() + key.slice(1);
-                walkJson(
-                  subName,
-                  value[0],
-                  bucket,
-                  seen,
-                  depth + 1,
-                  childOrder++
-                );
-                type = "array";
-                annotations = `/** @var ${subName}[] */\n#[ArrayOf(${subName}::class)]\n`;
-                usesArrayOf = true;
-              } else type = "array";
-            } else if (typeof value === "object") {
-              const subName = key[0].toUpperCase() + key.slice(1);
-              walkJson(subName, value, bucket, seen, depth + 1, childOrder++);
-              type = subName;
-            } else if (typeof value === "number")
-              type = Number.isInteger(value) ? "int" : "float";
-            else if (typeof value === "boolean") type = "bool";
-            else if (typeof value === "string") type = "string";
-            props.push({ key, type, annotations, isExtracted: false, originalType: type });
+        // ===== converter-core:start =====
+        // Pure conversion logic (no Vue). Kept in one block so it can be tested on its own.
+        const Core = (() => {
+          // A JSON number kept as its source text, so `10.0` stays a float and big integers keep every digit.
+          class JNum {
+            constructor(raw) {
+              this.raw = raw;
+              // PHP's json_decode() also turns integers beyond PHP_INT_MAX into floats.
+              this.isFloat = /[.eE]/.test(raw) || (BigInt(raw) < -(2n ** 63n) || BigInt(raw) >= 2n ** 63n);
+            }
           }
-          bucket.push({
-            name: className,
-            props,
-            usesArrayOf,
-            baseType: "DataTransferObject",
-            depth,
-            order,
-          });
-        }
+
+          // JSON parser that keeps number text (JNum) and key order (Map).
+          function parseJson(text) {
+            let i = 0;
+            const fail = (msg) => {
+              const before = text.slice(0, i), line = before.split("\n").length;
+              throw new SyntaxError(`${msg} at line ${line}, column ${i - before.lastIndexOf("\n")}`);
+            };
+            const ws = () => { while (i < text.length && " \t\n\r".includes(text[i])) i++; };
+            const str = () => {
+              const m = /^"(?:[^"\\\u0000-\u001f]|\\(?:["\\\/bfnrt]|u[0-9a-fA-F]{4}))*"/.exec(text.slice(i));
+              if (!m) fail("Invalid string");
+              i += m[0].length;
+              return JSON.parse(m[0]);
+            };
+            const value = () => {
+              ws();
+              const c = text[i];
+              if (c === "{") {
+                i++;
+                const obj = new Map();
+                ws();
+                if (text[i] === "}") { i++; return obj; }
+                for (;;) {
+                  ws();
+                  if (text[i] !== '"') fail("Expected a property name");
+                  const k = str();
+                  ws();
+                  if (text[i++] !== ":") { i--; fail("Expected ':'"); }
+                  obj.set(k, value());
+                  ws();
+                  if (text[i] === ",") { i++; continue; }
+                  if (text[i] === "}") { i++; return obj; }
+                  fail("Expected ',' or '}'");
+                }
+              }
+              if (c === "[") {
+                i++;
+                const arr = [];
+                ws();
+                if (text[i] === "]") { i++; return arr; }
+                for (;;) {
+                  arr.push(value());
+                  ws();
+                  if (text[i] === ",") { i++; continue; }
+                  if (text[i] === "]") { i++; return arr; }
+                  fail("Expected ',' or ']'");
+                }
+              }
+              if (c === '"') return str();
+              const m = /^(?:-?(?:0|[1-9]\d*)(?:\.\d+)?(?:[eE][+-]?\d+)?|true|false|null)/.exec(text.slice(i));
+              if (!m) fail(i >= text.length ? "Unexpected end of JSON" : `Unexpected token '${c}'`);
+              i += m[0].length;
+              return m[0] === "true" ? true : m[0] === "false" ? false : m[0] === "null" ? null : new JNum(m[0]);
+            };
+            const result = value();
+            ws();
+            if (i < text.length) fail(`Unexpected token '${text[i]}'`);
+            return result;
+          }
+
+          // Pretty-prints a parseJson() result, writing numbers exactly as they were written.
+          function stringifyJson(v, indent = "  ", pad = "") {
+            if (v instanceof JNum) return v.raw;
+            if (v instanceof Map) {
+              if (!v.size) return "{}";
+              const inner = pad + indent;
+              return `{\n${[...v].map(([k, x]) => `${inner}${JSON.stringify(k)}: ${stringifyJson(x, indent, inner)}`).join(",\n")}\n${pad}}`;
+            }
+            if (Array.isArray(v)) {
+              if (!v.length) return "[]";
+              const inner = pad + indent;
+              return `[\n${v.map((x) => inner + stringifyJson(x, indent, inner)).join(",\n")}\n${pad}]`;
+            }
+            return JSON.stringify(v);
+          }
+
+          const formatJson = (text) => stringifyJson(parseJson(text));
+
+          // Port of ImmutableBase::convertCase(), so generated #[InputKeyTo]/#[OutputKeyTo] match what IB does at runtime.
+          const ucfirst = (w) => w.replace(/^[a-z]/, (c) => c.toUpperCase());
+          const words = (name) =>
+            name.split(/(?<=[a-z\d])(?=[A-Z])|(?<=[A-Z])(?=[A-Z][a-z])|[-_ \t\n\v\f\r]+/)
+              .filter(Boolean)
+              .map((w) => w.replace(/[A-Z]/g, (c) => c.toLowerCase()));
+          function convertCase(name, keyCase) {
+            const w = words(name);
+            if (!w.length) return "";
+            switch (keyCase) {
+              case "Snake": return w.join("_");
+              case "Kebab": return w.join("-");
+              case "Macro": return w.map((x) => x.toUpperCase()).join("_");
+              case "Camel": return w[0] + w.slice(1).map(ucfirst).join("");
+              case "CamelKebab": return `${w[0]}-` + w.slice(1).map(ucfirst).join("-");
+              case "PascalSnake": return w.map(ucfirst).join("_");
+              case "Train": return w.map(ucfirst).join("-");
+              default: return w.map(ucfirst).join("");
+            }
+          }
+          const OUTPUT_CASES = ["Kebab", "Snake", "Macro", "PascalSnake", "Pascal", "Train", "CamelKebab"];
+
+          const isIdentifier = (s) => /^[A-Za-z_\u0080-\u{10FFFF}][A-Za-z0-9_\u0080-\u{10FFFF}]*$/u.test(s);
+          // Names PHP refuses as class names (checked with php -l on PHP 8.4), plus the names the generated files import.
+          const RESERVED = new Set(("abstract and array as bool break callable case catch class clone const continue declare default do echo " +
+            "else elseif empty enddeclare endfor endforeach endif endswitch endwhile eval exit extends false final finally float fn for " +
+            "foreach function global goto if implements include include_once instanceof insteadof int interface isset iterable list " +
+            "match mixed namespace never new null object or parent print private protected public readonly require require_once return " +
+            "self static string switch throw trait true try unset use var void while xor yield " +
+            "arrayof datatransferobject valueobject singlevalueobject inputkeyto outputkeyto keycase").split(" "));
+
+          // Type summary of every value seen at one position of the JSON (all array items are merged into one).
+          const newSeen = () => ({ total: 0, nul: 0, int: 0, float: 0, bool: 0, string: 0, obj: null, arr: null });
+          function observe(seen, v) {
+            seen.total++;
+            if (v === null) seen.nul++;
+            else if (v instanceof JNum) seen[v.isFloat ? "float" : "int"]++;
+            else if (typeof v === "boolean") seen.bool++;
+            else if (typeof v === "string") seen.string++;
+            else if (Array.isArray(v)) {
+              seen.arr ??= newSeen();
+              for (const item of v) observe(seen.arr, item);
+            } else {
+              seen.obj ??= { count: 0, fields: new Map() };
+              seen.obj.count++;
+              for (const [k, x] of v) {
+                if (!seen.obj.fields.has(k)) seen.obj.fields.set(k, newSeen());
+                observe(seen.obj.fields.get(k), x);
+              }
+            }
+          }
+          // Scalar PHP types seen; int and float together become float, since IB float accepts int but int rejects float.
+          const scalarsOf = (s) => [s.float ? "float" : s.int ? "int" : null, s.string && "string", s.bool && "bool"].filter(Boolean);
+
+          function generate(json) {
+            const classes = [], names = new Map([["root", null]]), notices = [];
+
+            // Picks a class name from a JSON key: PascalCase, valid in PHP, not reserved, unique unless the shape is identical.
+            function className(key, parent, signature) {
+              let base = words(key).map(ucfirst).join("").replace(/[^A-Za-z0-9_\u0080-\u{10FFFF}]/gu, "");
+              if (!base) base = "Item";
+              if (/^\d/.test(base)) base = parent + base;
+              if (RESERVED.has(base.toLowerCase())) base += "Data";
+              for (let n = 1; ; n++) {
+                const name = n === 1 ? base : n === 2 && !base.startsWith(parent) ? parent + base : `${base}${n}`;
+                const lower = name.toLowerCase();
+                if (!names.has(lower)) {
+                  names.set(lower, signature);
+                  return { name, reused: false };
+                }
+                if (names.get(lower) === signature) return { name, reused: true };
+              }
+            }
+
+            // Builds the class for one object shape; returns its name. Children are built first.
+            function emitClass(shape, key, parent, depth, order, forcedName) {
+              const props = [], keys = [...shape.fields.keys()];
+              // Keys that are already valid property names keep them; renamed keys must not collide with these.
+              const used = new Set(keys.filter(isIdentifier));
+              let childOrder = 0;
+              const hint = forcedName || words(key).map(ucfirst).join("") || "Item";
+              for (const [jsonKey, seen] of shape.fields) {
+                const prop = { key: "", type: "", annotations: "", isExtracted: false, originalType: "", sourceKey: jsonKey };
+                // Property name
+                const camel = convertCase(jsonKey, "Camel");
+                if (isIdentifier(jsonKey)) prop.key = jsonKey;
+                else if (/^[A-Za-z0-9_\- ]+$/.test(jsonKey) && isIdentifier(camel) && !used.has(camel) &&
+                  // IB maps every input key whose camelCase equals the property name, so that must be this key only.
+                  !keys.some((k) => k !== jsonKey && convertCase(k, "Camel") === camel)) {
+                  prop.key = camel;
+                  prop.inputCase = "Camel";
+                  prop.outputCase = OUTPUT_CASES.find((c) => convertCase(camel, c) === jsonKey) || null;
+                  if (!prop.outputCase) prop.warning = `toArray(true) outputs "${camel}" instead of JSON key "${jsonKey}"`;
+                } else {
+                  let name = jsonKey.replace(/[^A-Za-z0-9_\u0080-\u{10FFFF}]/gu, "_");
+                  if (!name || /^\d/.test(name)) name = "_" + name;
+                  for (let n = 2, b = name; used.has(name); n++) name = `${b}${n}`;
+                  prop.key = name;
+                  prop.warning = `JSON key "${jsonKey}" cannot be mapped to a PHP property automatically; rename it in the input before fromArray()`;
+                }
+                used.add(prop.key);
+
+                // Type
+                const scalars = scalarsOf(seen), hasObj = !!seen.obj, hasArr = !!seen.arr;
+                const kinds = scalars.length + hasObj + hasArr;
+                const nullable = seen.nul > 0 || seen.total < shape.count;
+                let type;
+                if (kinds === 0) type = "mixed";
+                else if (kinds > 1 && (hasObj || hasArr)) {
+                  type = "mixed";
+                  prop.warning ??= `JSON values vary (${[...scalars, hasObj && "object", hasArr && "array"].filter(Boolean).join(", ")})`;
+                } else if (hasObj) type = emitClass(seen.obj, jsonKey, hint, depth + 1, childOrder++);
+                else if (hasArr) {
+                  type = "array";
+                  const items = seen.arr, itemScalars = scalarsOf(items);
+                  const itemKinds = itemScalars.length + !!items.obj + !!items.arr;
+                  if (items.obj && itemKinds === 1) {
+                    const item = emitClass(items.obj, jsonKey, hint, depth + 1, childOrder++);
+                    if (items.nul) {
+                      prop.docType = `array<int, ${item}|null>`;
+                      prop.warning ??= "array contains null items, which #[ArrayOf] rejects";
+                    } else prop.arrayOf = item;
+                  } else if (itemKinds === 1) {
+                    const t = items.arr ? "array" : itemScalars[0];
+                    prop.docType = items.nul ? `array<int, ${t}|null>` : `${t}[]`;
+                  }
+                  else if (itemKinds > 1) prop.warning ??= "array items vary in type";
+                } else type = scalars.join("|");
+                if (nullable && type !== "mixed") type = type.includes("|") ? `${type}|null` : `?${type}`;
+                if (scalars.length === 1 && kinds === 1) {
+                  prop.scalar = scalars[0];
+                  prop.nullable = nullable;
+                }
+                prop.type = prop.originalType = type;
+                props.push(prop);
+              }
+              const signature = props.map((p) => `${p.sourceKey}:${p.type}:${p.arrayOf || ""}`).join(";");
+              let name;
+              if (forcedName) {
+                name = forcedName;
+                names.set(name.toLowerCase(), signature);
+              } else {
+                const picked = className(key, parent, signature);
+                if (picked.reused) return picked.name;
+                name = picked.name;
+              }
+              classes.push({ name, props, usesArrayOf: props.some((p) => p.arrayOf), baseType: "DataTransferObject", depth, order });
+              return name;
+            }
+
+            const top = newSeen();
+            observe(top, json);
+            if (top.obj && !top.arr && top.total === 1) emitClass(top.obj, "Root", "", 0, 0, "Root");
+            else if (top.arr && top.arr.obj && scalarsOf(top.arr).length === 0 && !top.arr.arr) {
+              emitClass(top.arr.obj, "Root", "", 0, 0, "Root");
+              notices.push(top.arr.nul ? "rootArrayWithNull" : "rootArray");
+            } else throw new Error("rootNotObject");
+            classes.sort((a, b) => (a.depth !== b.depth ? a.depth - b.depth : a.order - b.order));
+            if (classes.some((c) => c.props.some((p) => p.warning))) notices.push("hasWarnings");
+            return { classes, notices };
+          }
+
+          // Scalar type of a property that can become a SingleValueObject, or null. Handles history saved by older versions.
+          function extractable(p) {
+            if (p.scalar !== undefined) return p.scalar || null;
+            return ["int", "float", "bool", "string"].includes(p.originalType) ? p.originalType : null;
+          }
+
+          // Turns a scalar property into a SingleValueObject class and returns that class (the caller adds it to the list).
+          function extractProperty(classes, cls, prop) {
+            const scalar = extractable(prop);
+            let name = cls.name + ucfirst(prop.key);
+            while (classes.some((c) => c.name.toLowerCase() === name.toLowerCase())) name += "Value";
+            prop.isExtracted = true;
+            prop.extractedClass = name;
+            prop.type = (prop.nullable ? "?" : "") + name;
+            return {
+              name,
+              props: [{ key: "value", type: scalar, annotations: "", isExtracted: false, originalType: scalar, scalar: "" }],
+              usesArrayOf: false,
+              baseType: "SingleValueObject",
+              depth: cls.depth,
+              order: cls.order,
+              version: "v4",
+            };
+          }
+
+          // Reverses extractProperty(); returns the name of the class to remove.
+          function restoreProperty(cls, prop) {
+            const name = prop.extractedClass || cls.name + ucfirst(prop.key);
+            prop.isExtracted = false;
+            prop.type = prop.originalType;
+            delete prop.extractedClass;
+            return name;
+          }
+
+          function renderClass(cls, { version, namespace }) {
+            const isV4 = version === "v4";
+            const props = cls.props;
+            const useLines = [];
+            if (cls.usesArrayOf || props.some((p) => p.arrayOf && !p.isExtracted))
+              useLines.push(`use ${isV4 ? "ReallifeKip\\ImmutableBase\\Attributes\\ArrayOf" : "ReallifeKip\\ImmutableBase\\ArrayOf"};`);
+            if (isV4 && props.some((p) => p.inputCase)) useLines.push("use ReallifeKip\\ImmutableBase\\Attributes\\InputKeyTo;");
+            if (isV4 && props.some((p) => p.outputCase)) useLines.push("use ReallifeKip\\ImmutableBase\\Attributes\\OutputKeyTo;");
+            if (isV4 && props.some((p) => p.inputCase)) useLines.push("use ReallifeKip\\ImmutableBase\\Enums\\KeyCase;");
+            useLines.push(`use ReallifeKip\\ImmutableBase\\Objects\\${cls.baseType};`);
+
+            const ind = "    ";
+            const visibility = isV4 ? "public" : cls.baseType === "ValueObject" ? "private" : "public";
+            const propsCode = props.map((p) => {
+              const lines = [];
+              if (p.warning) lines.push(`// ⚠ ${p.warning}`);
+              if (p.inputCase && !isV4) lines.push(`// ⚠ JSON key "${p.sourceKey}" must be renamed to "${p.key}" before fromArray() (#[InputKeyTo] needs v4.3+)`);
+              if (p.annotations) lines.push(...p.annotations.split("\n").filter(Boolean));
+              if (p.arrayOf && !p.isExtracted) lines.push(`/** @var ${p.arrayOf}[] */`, `#[ArrayOf(${p.arrayOf}::class)]`);
+              else if (p.docType) lines.push(`/** @var ${p.docType} */`);
+              if (isV4 && p.inputCase) lines.push(`#[InputKeyTo(KeyCase::${p.inputCase})]`);
+              if (isV4 && p.outputCase) lines.push(`#[OutputKeyTo(KeyCase::${p.outputCase})]`);
+              lines.push(`${visibility} ${isV4 ? "" : "readonly "}${p.type} $${p.key};`);
+              return lines.map((l) => ind + l).join("\n");
+            }).join("\n");
+            const validateMethod = cls.baseType === "SingleValueObject" || (isV4 && cls.baseType === "ValueObject")
+              ? `\n${ind}public function validate(): bool\n${ind}{\n${ind}${ind}return true;\n${ind}}`
+              : "";
+            const namespaceSection = namespace ? `namespace ${namespace};\n\n` : "";
+            return `<?php\n\n${namespaceSection}${useLines.join("\n")}\n\n${isV4 ? "readonly class" : "class"} ${cls.name} extends ${cls.baseType}\n{\n${propsCode}${validateMethod}\n}`;
+          }
+
+          return { parseJson, stringifyJson, formatJson, convertCase, generate, extractable, extractProperty, restoreProperty, renderClass };
+        })();
+        // ===== converter-core:end =====
 
         const convert = () => {
           error.value = "";
+          notices.value = [];
           classes.value = [];
           extractionMap.value = {};
           originTargetId.value = null;
+          let parsed, bucket;
           try {
-            const parsed = JSON.parse(jsonText.value),
-              bucket = [];
-            walkJson("Root", parsed, bucket, new Set());
-            bucket.sort((a, b) =>
-              a.depth !== b.depth ? a.depth - b.depth : a.order - b.order
-            );
+            parsed = Core.parseJson(jsonText.value);
+          } catch (e) {
+            error.value = `⚠️ Invalid JSON: ${e.message}`;
+            return;
+          }
+          try {
+            const result = Core.generate(parsed);
+            bucket = result.classes;
+            notices.value = result.notices;
+          } catch (e) {
+            error.value = e.message === "rootNotObject" ? t("rootNotObject") : `⚠️ ${e.message}`;
+            return;
+          }
+          {
             classes.value = bucket;
-            jsonText.value = JSON.stringify(parsed, null, 2);
+            jsonText.value = Core.stringifyJson(parsed);
             if (bucket.length > 0) {
               const { ids, batchId } = addToHistory(bucket, jsonText.value);
               const convertHistoryIndex = addToConvertHistory(jsonText.value);
@@ -727,13 +1026,11 @@
                 }
               }, 200);
             }
-          } catch (e) {
-            error.value = `⚠️ Invalid JSON: ${e.message}`;
           }
         },
           getExtractableProps = (cls) => {
             if (cls.baseType === 'SingleValueObject') return [];
-            return cls.props.filter(p => ['int', 'float', 'bool', 'string', 'mixed'].includes(p.originalType));
+            return cls.props.filter(p => Core.extractable(p));
           },
           syncHistoryBatch = () => {
             if (!currentBatchId.value) return;
@@ -767,22 +1064,12 @@
             saveHistoryToStorage();
           },
           toggleExtractProperty = (cls, prop) => {
-            prop.isExtracted = !prop.isExtracted;
-            const newClassName = cls.name + prop.key.charAt(0).toUpperCase() + prop.key.slice(1);
             const originalClassId = `class-${cls.name}`;
 
-            if (prop.isExtracted) {
-              prop.type = newClassName;
-              const newClass = {
-                name: newClassName,
-                props: [{ key: 'value', type: prop.originalType, annotations: '', isExtracted: false, originalType: prop.originalType }],
-                usesArrayOf: false,
-                baseType: 'SingleValueObject',
-                depth: cls.depth,
-                order: cls.order,
-                version: 'v4',
-                namespace: cls.namespace || namespaceValue.value
-              };
+            if (!prop.isExtracted) {
+              const newClass = Core.extractProperty(classes.value, cls, prop);
+              const newClassName = newClass.name;
+              newClass.namespace = cls.namespace || namespaceValue.value;
               classes.value.push(newClass);
               // Record mapping for scroll back
               extractionMap.value[newClassName] = originalClassId;
@@ -806,7 +1093,7 @@
                 }
               });
             } else {
-              prop.type = prop.originalType;
+              const newClassName = Core.restoreProperty(cls, prop);
               const idx = classes.value.findIndex(c => c.name === newClassName && c.baseType === 'SingleValueObject');
               if (idx !== -1) {
                 classes.value.splice(idx, 1);
@@ -821,49 +1108,11 @@
               syncHistoryBatch();
             }
           },
-          renderClass = (cls) => {
-            const useLines = [];
-            const currentItemVersion = cls.baseType === "SingleValueObject" ? "v4" : (cls.version || versionValue.value);
-            const isV4 = currentItemVersion === "v4";
-            if (cls.usesArrayOf) {
-              const arrayOfNs = isV4 ? "ReallifeKip\\ImmutableBase\\Attributes\\ArrayOf" : "ReallifeKip\\ImmutableBase\\ArrayOf";
-              useLines.push(`use ${arrayOfNs};`);
-            }
-
-            if (cls.baseType === "SingleValueObject") {
-              useLines.push("use ReallifeKip\\ImmutableBase\\Objects\\SingleValueObject;");
-            } else if (cls.baseType === "DataTransferObject") {
-              useLines.push("use ReallifeKip\\ImmutableBase\\Objects\\DataTransferObject;");
-            } else {
-              useLines.push("use ReallifeKip\\ImmutableBase\\Objects\\ValueObject;");
-            }
-
-            const classPrefix = isV4 ? "readonly class" : "class";
-            const propertyReadonly = isV4 ? "" : "readonly ";
-
-            const visibility =
-              isV4 ? "public" : cls.baseType === "ValueObject" ? "private" : "public",
-              propsCode = cls.props
-                .map((p) => {
-                  const ind = "    ",
-                    ann = p.annotations
-                      ? p.annotations
-                        .split("\n")
-                        .filter(Boolean)
-                        .map((l) => `${ind}${l}`)
-                        .join("\n") + "\n"
-                      : "";
-                  return `${ann}${ind}${visibility} ${propertyReadonly}${p.type} $${p.key};`;
-                })
-                .join("\n"),
-              useSection = useLines.join("\n").replace(/\\/g, "\\"),
-              namespaceToUse = cls.namespace || namespaceValue.value,
-              namespaceSection = namespaceToUse ? `namespace ${namespaceToUse};\n\n` : "";
-            const validateMethod = (cls.baseType === "SingleValueObject" || (isV4 && cls.baseType === "ValueObject"))
-              ? `\n    public function validate(): bool\n    {\n        return true;\n    }`
-              : "";
-            return `<?php\n\n${namespaceSection}${useSection}\n\n${classPrefix} ${cls.name} extends ${cls.baseType}\n{\n${propsCode}${validateMethod}\n}`;
-          },
+          renderClass = (cls) =>
+            Core.renderClass(cls, {
+              version: cls.baseType === "SingleValueObject" ? "v4" : (cls.version || versionValue.value),
+              namespace: cls.namespace || namespaceValue.value,
+            }),
           highlightPhp = (code, currentClassName) => {
             let placeholders = [],
               i = 0;
@@ -904,6 +1153,11 @@
                   return key;
                 }
               )
+              .replace(/\$(?!this\b)[\w\u0080-\uffff]+/g, (m) => {
+                const key = `__SPAN_${i++}__`;
+                placeholders.push({ key, value: `<span style="color:#9cdcfe">${m}</span>` });
+                return key;
+              })
               .replace(/@var/g, '<span style="color:#569cd6">@var</span>')
               .replace(
                 /ReallifeKip\\ImmutableBase\\Attributes\\ArrayOf/g,
@@ -1158,7 +1412,7 @@
             });
             let formattedJson = json;
             try {
-              formattedJson = JSON.stringify(JSON.parse(json), null, 2);
+              formattedJson = Core.formatJson(json);
             } catch (e) { }
             convertHistory.value.unshift({
               json: formattedJson,
@@ -1234,11 +1488,7 @@
           formatJson = () => {
             try {
               if (!jsonText.value.trim()) return;
-              jsonText.value = JSON.stringify(
-                JSON.parse(jsonText.value),
-                null,
-                2
-              );
+              jsonText.value = Core.formatJson(jsonText.value);
               error.value = "";
             } catch (e) {
               error.value = `⚠️ Invalid JSON: ${e.message}`;
@@ -1299,6 +1549,7 @@
           jsonText,
           classes,
           error,
+          notices,
           history,
           historyExpanded,
           convertHistory,
